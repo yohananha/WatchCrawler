@@ -1,0 +1,19 @@
+# Render Blueprint. In the Render dashboard: New > Blueprint > connect this
+# repo (yohananha/WatchCrawler) > it auto-detects this file. Set
+# ANTHROPIC_API_KEY and WATCH_SHARED_KEY as secrets after the first deploy
+# (Render dashboard > this service > Environment) - not committed here.
+# See server/README.md for the full walkthrough.
+services:
+  - type: web
+    name: watchcrawler
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon          # pick the region closest to you
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false          # set manually in the dashboard - never committed
+      - key: WATCH_SHARED_KEY
+        sync: false

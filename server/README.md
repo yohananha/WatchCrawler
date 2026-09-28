@@ -1,4 +1,4 @@
-# Garmin Achievements – שכבת ה-LLM
+# WatchCrawler – שכבת ה-LLM
 
 שרת קטן ב-ASP.NET Core (‎.NET 10, בלי חבילות חיצוניות) שמקבל אירוע מהשעון ומחזיר הישג סרקסטי.
 כולל מצב השוואה עיוורת בין ספקי LLM.
@@ -14,7 +14,8 @@
 | `Program.cs` | מצב API או מצב השוואה, אימות מפתח משותף |
 | `sample-events.json` | 10 אירועים לדוגמה – כדאי להחליף באירועים אמיתיים שלך |
 | `Tests/` | בדיקות יחידה (xUnit) ל-`TierCalculator` ו-`AchievementGenerator` |
-| `Dockerfile`, `fly.toml` | דיפלוי ל-Fly.io |
+| `Dockerfile`, `render.yaml` | דיפלוי ל-Render |
+| `fly.toml` | דיפלוי ל-Fly.io (חלופה – דורש כרטיס אשראי גם ל-tier החינמי) |
 
 ## הרצה
 
@@ -63,7 +64,21 @@ cd Tests && dotnet test
 
 רץ אוטומטית ב-CI (`.github/workflows/ci.yml`) בכל push/PR.
 
-### דיפלוי ל-Fly.io
+### דיפלוי ל-Render
+
+1. [dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint** → מחברים את
+   `yohananha/WatchCrawler` (דורש הרשאת GitHub ל-Render, דבר שרק אתם יכולים לאשר).
+2. Render מזהה את `render.yaml` אוטומטית.
+3. אחרי הדיפלוי הראשון: **Environment** → מוסיפים `ANTHROPIC_API_KEY` ו-`WATCH_SHARED_KEY` (לא
+   שמורים בקוד).
+
+Render נותן HTTPS אוטומטית (נדרש – Connect IQ מסרב לבקשות HTTP רגילות, קוד תגובה -1001
+`SECURE_CONNECTION_REQUIRED`). ה-tier החינמי נרדם אחרי חוסר פעילות – הבקשה הראשונה בכל יום
+תיקח כמה שניות נוספות (cold start).
+
+### חלופה: Fly.io
+
+דורש כרטיס אשראי גם ל-tier החינמי (בדקנו – ה-trial כבר לא מספיק). אם יש לכם כרטיס רשום:
 
 ```bash
 fly auth login
@@ -71,9 +86,6 @@ fly apps create <שם-ייחודי>          # ולעדכן ב-fly.toml
 fly secrets set ANTHROPIC_API_KEY=sk-ant-... WATCH_SHARED_KEY=<מחרוזת אקראית>
 fly deploy
 ```
-
-Fly מספק HTTPS אוטומטית (נדרש – Connect IQ מסרב לבקשות HTTP רגילות, קוד תגובה -1001
-`SECURE_CONNECTION_REQUIRED`).
 
 ## החלטות עיצוב
 
