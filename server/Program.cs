@@ -32,6 +32,22 @@ if (compareMode)
     return;
 }
 
+// One line per request (before auth, so rejected ones show too). Success is
+// otherwise silent, which made "did the watch ever check in?" unanswerable
+// from the Fly logs. Never logs the key itself, only whether one was sent.
+var requestLog = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Requests");
+app.Use(async (context, next) =>
+{
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    await next();
+    if (context.Request.Path.StartsWithSegments("/health")) return;
+    var client = context.Request.Headers["Fly-Client-IP"].FirstOrDefault() ?? context.Connection.RemoteIpAddress?.ToString();
+    requestLog.LogInformation("{Method} {Path} -> {Status} in {Ms}ms (key {Key}, client {Client}, ua {Ua})",
+        context.Request.Method, context.Request.Path, context.Response.StatusCode, sw.ElapsedMilliseconds,
+        context.Request.Headers.ContainsKey("X-Watch-Key") ? "sent" : "absent", client,
+        context.Request.Headers.UserAgent.ToString());
+});
+
 // Shared-key auth: the watch sends X-Watch-Key, checked against the
 // WATCH_SHARED_KEY env var. Unset -> auth is off (local dev convenience;
 // always set it in production so randoms can't burn your Anthropic quota).
@@ -63,15 +79,21 @@ app.MapGet("/health", () => Results.Ok("ok"));
 // background check consumes it on its next 5-min tick and runs it through
 // the real AchievementGenerator, same as a genuine detected activity - see
 // watch/source/TriggerChecker.mc and BackgroundService.mc.
-app.MapPost("/trigger-test", () =>
+app.MapPost("/trigger-test", (ILogger<Program> log) =>
 {
     TestTrigger.Arm();
+    log.LogInformation("Test trigger ARMED");
     return Results.Ok(new { armed = true });
 });
 
 app.MapGet("/trigger-test", () => Results.Ok(new { armed = TestTrigger.IsArmed() }));
 
-app.MapPost("/trigger-test/consume", () => Results.Ok(new { wasArmed = TestTrigger.ConsumeIfArmed() }));
+app.MapPost("/trigger-test/consume", (ILogger<Program> log) =>
+{
+    var wasArmed = TestTrigger.ConsumeIfArmed();
+    log.LogInformation("Watch polled trigger: wasArmed={WasArmed}", wasArmed);
+    return Results.Ok(new { wasArmed });
+});
 
 // Unauthenticated on purpose (the key goes in the page's own field, sent as
 // a header via fetch() below) - this is just the HTML shell.
@@ -118,6 +140,12 @@ app.MapPost("/achievement", async (
 {
     var provider = factory.Create(s.ActiveProvider);
     var result = await generator.GenerateAsync(e, provider, recordHistory: true, ct);
+
+    var a = result.Achievement;
+    log.LogInformation(
+        "Achievement for {Type} value={Value}: tier={Tier} via {Provider}/{Model} fallback={Fallback} attempts={Attempts} tokens={In}+{Out} in {Ms}ms",
+        e.Type, e.Value, a.Tier, a.Provider, a.Model, a.IsFallback, result.Attempts,
+        result.InputTokens, result.OutputTokens, (long)result.Latency.TotalMilliseconds);
 
     if (result.Error is not null)
         log.LogWarning("Generation issue ({Provider}): {Error}", provider.Name, result.Error);
