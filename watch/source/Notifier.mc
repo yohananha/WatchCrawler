@@ -25,13 +25,13 @@ class Notifier {
     }
 
     static function notifyTest() as String {
-        return notify("* LEGENDARY ACHIEVEMENT", "Phase 0 Test", "If you can see this with sound/vibration, Notifications works on this device.");
+        return notify("LEGENDARY ACHIEVEMENT", "Phase 0 Test", "If you can see this with sound/vibration, Notifications works on this device.");
     }
 
     static function notifyAchievement(a as Dictionary) as String {
         var tierUpper = (a["tier"] as String);
         tierUpper = tierUpper.toUpper();
-        var title = "* " + tierUpper + " ACHIEVEMENT";
+        var title = tierUpper + " ACHIEVEMENT";
         return notify(title, a["title"] as String, a["text"] as String);
     }
 
