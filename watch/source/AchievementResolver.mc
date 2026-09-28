@@ -64,7 +64,7 @@ class AchievementResolver {
             body = {
                 "type" => core["eventType"],
                 "higherIsBetter" => true,
-                "details" => { "stepsToday" => (core["steps"] as Number).toString() },
+                "details" => core["details"],
             };
         }
 
@@ -103,7 +103,7 @@ class AchievementResolver {
 
     private function finishWithServerText(data as Dictionary) as Void {
         var core = _core as Dictionary;
-        finish({
+        var result = {
             "hero" => core["hero"],
             "title" => data["title"],
             "stat" => core["stat"],
@@ -111,15 +111,17 @@ class AchievementResolver {
             "reward" => data["reward"],
             "tier" => core["tier"],
             "sound" => core["sound"],
-        });
+        };
+        if (core.hasKey("eventType")) { result.put("eventType", core["eventType"]); }
+        finish(result);
     }
 
     private function finishWithFallback() as Void {
         var core = _core as Dictionary;
         var tier = Baseline.tierFromName(core["tier"] as String);
-        var words = core.hasKey("eventType") ? TextBank.pickIdle() : TextBank.pick(tier, core["km"] as Float, core["durationSec"] as Number,
+        var words = core.hasKey("eventType") ? TextBank.pickEvent(core["eventType"] as String) : TextBank.pick(tier, core["km"] as Float, core["durationSec"] as Number,
             core["pace"] as String, core["hero"] as String);
-        finish({
+        var result = {
             "hero" => core["hero"],
             "title" => words[0],
             "stat" => core["stat"],
@@ -127,7 +129,9 @@ class AchievementResolver {
             "reward" => words[2],
             "tier" => core["tier"],
             "sound" => core["sound"],
-        });
+        };
+        if (core.hasKey("eventType")) { result.put("eventType", core["eventType"]); }
+        finish(result);
     }
 
     private function finish(achievement as Dictionary) as Void {

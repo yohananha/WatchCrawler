@@ -102,7 +102,13 @@ class ActivityDetector {
         }
 
         if (tier == :idle) {
-            return IdleDayChecker.buildCore();
+            return DayEvents.buildIdle();
+        }
+        if (tier == :goal) {
+            return DayEvents.buildGoalMissed(null);
+        }
+        if (tier == :sit) {
+            return DayEvents.buildSedentary(null);
         }
 
         var durationSec = 1500; // ~common, 5km @ 5:00/km

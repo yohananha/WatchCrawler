@@ -80,6 +80,9 @@ public static class PromptBuilder
             - Tier "cursed" means the player did worse than usual: mock them with a sarcastic "award" for failing.
             - Event "no_achievement_today" means the player achieved nothing at all today. Roast the empty day
               (use the steps count if given), never the person's body. Always tier "cursed".
+            - Event "goal_missed" means the player ended the day under their step goal (details give steps and goal).
+              Event "sedentary" means the watch's move bar is maxed out after long inactivity. Roast the
+              inactivity, never the body, and give no medical advice.
             - Higher tiers are genuine wins: still sarcastic, but grudgingly impressed.
             - Use the actual numbers and context you are given. Specific beats generic.
             - Write original lines only. Never quote or reuse lines from any book, show or game.

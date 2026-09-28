@@ -46,10 +46,25 @@ class TextBank {
         ["Horizontal Excellence", "The couch reports a personal best in you not moving.", "A participation trophy for lying down."],
     ];
 
-    // Local fallback for the "no achievement today" event.
-    static function pickIdle() as [String, String, String] {
+    private static const GOAL_MISSED = [
+        ["Goal: Politely Declined", "The step goal was right there. You let it stay there.", "A bronze medal for staying put."],
+        ["So Close, Yet Seated", "Your step goal waited all day. It is not angry, just disappointed.", "One rain check. Expired."],
+        ["Steps: An Optional Extra", "You missed your step goal. The floor barely noticed you.", "Tomorrow's goal, unchanged and judging you."],
+    ];
+
+    private static const SEDENTARY = [
+        ["Professional Sitter", "Your move bar is maxed out. The chair has filed a joint tenancy request.", "One cushion. Non-transferable."],
+        ["Stationary Excellence", "Hours of stillness. Statues everywhere are taking notes.", "A standing ovation, from others."],
+        ["Motion Not Found", "Your watch begs you to move. You scrolled past it.", "A pat on the back. Please stand to receive."],
+    ];
+
+    // Local fallback for the roast events, rotating by day.
+    static function pickEvent(eventType as String) as [String, String, String] {
+        var bank = IDLE;
+        if (eventType.equals("goal_missed")) { bank = GOAL_MISSED; }
+        else if (eventType.equals("sedentary")) { bank = SEDENTARY; }
         var day = Time.now().value() / 86400;
-        var e = IDLE[day % IDLE.size()];
+        var e = bank[day % bank.size()];
         return [e[0], e[1], e[2]];
     }
 
