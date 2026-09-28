@@ -5,7 +5,7 @@
 #   fly deploy
 # See server/README.md for the full walkthrough.
 
-app = "garmin-achievements"          # CHANGE THIS to something unique
+app = "watchcrawler"
 primary_region = "iad"               # pick the region closest to you
 
 [build]

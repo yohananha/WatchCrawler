@@ -43,8 +43,13 @@ if (!string.IsNullOrEmpty(watchKey))
         if (context.Request.Path.StartsWithSegments("/achievement")
             && context.Request.Headers["X-Watch-Key"] != watchKey)
         {
+            // JSON, not plain text: the watch requests
+            // HTTP_RESPONSE_CONTENT_TYPE_JSON and can't parse a text body,
+            // which surfaced as a confusing -400 (INVALID_HTTP_BODY_IN_
+            // NETWORK_RESPONSE) instead of a clear 401 - found by testing
+            // an intentionally-wrong key against the real deployment.
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            await context.Response.WriteAsync("Missing or invalid X-Watch-Key.");
+            await context.Response.WriteAsJsonAsync(new { error = "Missing or invalid X-Watch-Key." });
             return;
         }
         await next();
