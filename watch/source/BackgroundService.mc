@@ -2,14 +2,19 @@ import Toybox.Background;
 import Toybox.Lang;
 import Toybox.System;
 
-// Runs every 5 minutes (registered in AchievementApp.onStart). First checks
-// for a new completed activity; if there isn't one, checks whether a remote
-// test was armed from the server's browser page (TriggerChecker). Either
-// path resolves the achievement text via AchievementResolver (Phase 2 LLM
-// server, falling back to the local TextBank), queues it for the foreground
-// view, and notifies. The resolve step is async (a network call), so this
-// doesn't call Background.exit() until onResolved runs - that's expected:
-// Garmin's background execution model waits for it, within its time budget.
+// Runs on Garmin's background timer (registered in AchievementApp.onStart).
+// Order matters: the remote test trigger is checked FIRST, then real
+// activity detection. If detection ever fails (it reads the FIT activity
+// history, which has crashed the background process in the simulator), it
+// can no longer stop a remote test from firing. Either path resolves the
+// achievement text via AchievementResolver (LLM server, falling back to the
+// local TextBank), queues it for the foreground view, and notifies. Those
+// are async network calls, so Background.exit() is only called from
+// onResolved / when there's nothing to do - Garmin's background model
+// waits for it, within its time budget.
+//
+// Every stage is recorded via BgStatus so a real watch (no console) can
+// show how far the last run got.
 (:background)
 class BackgroundService extends System.ServiceDelegate {
 
@@ -18,34 +23,39 @@ class BackgroundService extends System.ServiceDelegate {
     }
 
     function onTemporalEvent() as Void {
-        var core = ActivityDetector.detectCoreEvent();
-        if (core != null) {
-            AchievementResolver.get().resolve(core, method(:onResolved));
-            return;
-        }
-
+        BgStatus.mark("start");
         TriggerChecker.get().checkAndConsume(method(:onTriggerChecked));
     }
 
     function onTriggerChecked(armed as Boolean) as Void {
-        if (!armed) {
+        if (armed) {
+            BgStatus.mark("trigger armed -> resolving");
+            // See ActivityDetector.buildFakeCore: fixed values, tier forced
+            // to :legendary. Its baselineMean/Std are null, so the server
+            // computes its own tier for the TEXT (probably :common) - a
+            // cosmetic mismatch with our local :legendary styling/sound,
+            // fine for a "does the round trip work" test.
+            var test = ActivityDetector.buildFakeCore(:legendary);
+            AchievementResolver.get().resolve(test, method(:onResolved));
+            return;
+        }
+
+        BgStatus.mark("trigger not armed -> detecting");
+        var core = ActivityDetector.detectCoreEvent();
+        if (core == null) {
+            BgStatus.mark("done: no new activity");
             Background.exit(false);
             return;
         }
-        // See ActivityDetector.buildFakeCore: fixed values, tier forced to
-        // :legendary for a satisfying test notification. Its baselineMean/
-        // Std are null, so the server independently computes its own tier
-        // (probably :common, since it has no baseline either) for the TEXT
-        // it generates - a cosmetic mismatch with our local :legendary
-        // styling/sound that's fine for a "does the round trip work" test.
-        var core = ActivityDetector.buildFakeCore(:legendary);
+
+        BgStatus.mark("new activity -> resolving");
         AchievementResolver.get().resolve(core, method(:onResolved));
     }
 
     function onResolved(achievement as Dictionary) as Void {
         PendingQueue.push(achievement);
         var result = Notifier.notifyAchievement(achievement);
-        System.println("[BG] new " + (achievement["tier"] as String) + " achievement queued, " + result);
+        BgStatus.mark("done: notified (" + result + ")");
         Background.exit(true);
     }
 }

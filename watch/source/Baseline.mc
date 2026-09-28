@@ -13,6 +13,7 @@ import Toybox.Math;
 // the baseline itself. statsFor()/record() are split (rather than one
 // evaluateAndRecord) so Phase 2 can read the mean/std to send to the server
 // BEFORE recording the new value into its own baseline.
+(:background)
 class Baseline {
     private static const HISTORY_SIZE = 14;
     private static const MIN_SAMPLES = 3;

@@ -9,6 +9,7 @@ import Toybox.Math;
 // host. $1$=km, $2$=time (M:SS or H:MM:SS), $3$=pace (M:SS/km), $4$=sport.
 //
 // Limits match the server: title<=40, text<=120, reward<=70 chars.
+(:background)
 class TextBank {
 
     private static const CURSED = [

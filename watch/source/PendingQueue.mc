@@ -3,6 +3,7 @@ import Toybox.Lang;
 
 // Storage-backed queue of achievements waiting to be shown in the
 // foreground, plus a short rolling history (the future Hall of Shame).
+(:background)
 class PendingQueue {
     private static const MAX_HISTORY = 10;
 

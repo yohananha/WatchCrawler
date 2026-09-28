@@ -13,6 +13,7 @@ import Toybox.UserProfile;
 // reward itself anymore: that's AchievementResolver's job (server, with a
 // local TextBank fallback), since resolving now involves an async network
 // call. See BackgroundService for how the two are wired together.
+(:background)
 class ActivityDetector {
 
     static function detectCoreEvent() as Dictionary? {

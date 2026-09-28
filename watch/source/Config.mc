@@ -5,6 +5,7 @@ import Toybox.Lang;
 // Connect Mobile settings - or, for a sideloaded/non-Store app where GCM
 // shows "No settings", baked into resources/properties/properties.xml at
 // build time instead). Used by both AchievementResolver and TriggerChecker.
+(:background)
 class Config {
     static function serverUrl() as String? {
         return str("serverUrl");

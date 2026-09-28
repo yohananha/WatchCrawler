@@ -2,6 +2,7 @@ import Toybox.Lang;
 
 // Formats the one hard-number line the watch always has, regardless of
 // whether the achievement text came from the LLM or the local TextBank.
+(:background)
 class StatLine {
 
     // distanceMeters/durationSec come straight off UserProfile.UserActivity.
