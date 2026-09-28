@@ -1,0 +1,68 @@
+[
+  {
+    "type": "activity_completed",
+    "value": 10.2, "unit": "km",
+    "baselineMean": 7.5, "baselineStd": 1.8,
+    "details": { "sport": "running", "pace": "5:12 /km", "avgHr": "152", "startTime": "05:45" },
+    "timestamp": "2026-09-28T06:40:00+03:00"
+  },
+  {
+    "type": "activity_completed",
+    "value": 23.5, "unit": "min",
+    "baselineMean": 26.0, "baselineStd": 1.0,
+    "higherIsBetter": false,
+    "details": { "sport": "running", "distance": "5 km", "note": "personal record" },
+    "timestamp": "2026-09-27T18:20:00+03:00"
+  },
+  {
+    "type": "activity_completed",
+    "value": 1.1, "unit": "km",
+    "baselineMean": 3.0, "baselineStd": 1.0,
+    "details": { "sport": "walking", "duration": "14 min" },
+    "timestamp": "2026-09-26T20:10:00+03:00"
+  },
+  {
+    "type": "sleep_summary",
+    "value": 5.1, "unit": "hours",
+    "baselineMean": 6.9, "baselineStd": 0.6,
+    "details": { "sleepScore": "48", "bedtime": "01:20" },
+    "timestamp": "2026-09-28T06:30:00+03:00"
+  },
+  {
+    "type": "wake",
+    "details": { "alarm": "06:00", "actualWake": "06:47", "snoozes": "4" },
+    "timestamp": "2026-09-28T06:47:00+03:00"
+  },
+  {
+    "type": "steps_goal",
+    "value": 12500, "unit": "steps",
+    "baselineMean": 9000, "baselineStd": 2500,
+    "details": { "goal": "10000", "reachedAt": "17:05" },
+    "timestamp": "2026-09-28T17:05:00+03:00"
+  },
+  {
+    "type": "floors_goal",
+    "value": 10, "unit": "floors",
+    "baselineMean": 6, "baselineStd": 3,
+    "timestamp": "2026-09-28T13:30:00+03:00"
+  },
+  {
+    "type": "sedentary",
+    "value": 3.2, "unit": "hours",
+    "details": { "context": "sitting at the desk without a break" },
+    "timestamp": "2026-09-28T14:15:00+03:00"
+  },
+  {
+    "type": "resting_hr",
+    "value": 64, "unit": "bpm",
+    "baselineMean": 55, "baselineStd": 3,
+    "higherIsBetter": false,
+    "timestamp": "2026-09-28T07:00:00+03:00"
+  },
+  {
+    "type": "body_battery_low",
+    "value": 12, "unit": "%",
+    "details": { "time": "15:30" },
+    "timestamp": "2026-09-28T15:30:00+03:00"
+  }
+]

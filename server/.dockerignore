@@ -1,0 +1,4 @@
+bin/
+obj/
+compare-key*.json
+compare-report*.md

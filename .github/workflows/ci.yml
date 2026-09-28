@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server-tests:
+    name: Server tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore Tests/GarminAchievements.Tests.csproj
+
+      - name: Build
+        run: dotnet build Tests/GarminAchievements.Tests.csproj --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test Tests/GarminAchievements.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-test-results
+          path: server/Tests/TestResults/*.trx
+
+  server-build:
+    name: Server Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t garmin-achievements-server ./server
+
+  # The Connect IQ SDK requires an interactive EULA click-through via
+  # Garmin's SDK Manager (no scriptable, licensable download URL), so the
+  # watch app can't be compiled in a hosted CI runner. This job is a
+  # placeholder documenting that; watch changes are verified locally in the
+  # Connect IQ simulator (see watch/README or the project plan) before push.
+  watch-note:
+    name: Watch app (not CI-buildable - see comments)
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Connect IQ SDK needs an interactive EULA acceptance via Garmin's SDK Manager,"
+          echo "so the watch app isn't compiled here. Verify locally with monkeyc + the simulator"
+          echo "before pushing changes under watch/."

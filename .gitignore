@@ -1,0 +1,24 @@
+# .NET server
+server/bin/
+server/obj/
+**/bin/
+**/obj/
+.vs/
+
+# Compare-mode output (contains generated LLM text; regenerate, don't commit)
+compare-key*.json
+compare-report*.md
+archive/
+
+# Connect IQ watch app build output
+watch/bin/
+watch/gen/
+
+# Developer signing key (never commit)
+*.der
+*.p12
+*.pem
+
+# Secrets
+.env
+*.env.local

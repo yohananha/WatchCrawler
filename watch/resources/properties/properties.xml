@@ -1,0 +1,8 @@
+<properties xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
+    <!-- Empty by default: AchievementResolver treats a blank serverUrl as
+         "no server configured" and falls back to the local TextBank. Set
+         both via Garmin Connect Mobile > device > Achievements > Settings,
+         or in the simulator via its own Settings editor. -->
+    <property id="serverUrl" type="string"></property>
+    <property id="sharedKey" type="string"></property>
+</properties>
