@@ -10,6 +10,7 @@ import Toybox.Lang;
 // that copy. Open the app once after installing to populate it.
 (:background)
 class Config {
+    static var lastBakedError as String? = null;
     private static const STORE_URL = "cfgServerUrl";
     private static const STORE_KEY = "cfgSharedKey";
 
@@ -31,7 +32,8 @@ class Config {
     static function describe() as String {
         return "props:" + (fromProperties("serverUrl") == null ? "-" : "url")
             + " store:" + (fromStorage(STORE_URL) == null ? "-" : "url")
-            + " baked:" + (fromBaked(Rez.Strings.CfgServerUrl) == null ? "-" : "url");
+            + " baked:" + (fromBaked(Rez.Strings.CfgServerUrl) == null ? "-" : "url")
+            + (lastBakedError == null ? "" : " err:" + lastBakedError);
     }
 
     private static function read(propKey as String, storeKey as String) as String? {
@@ -52,6 +54,7 @@ class Config {
         try {
             return nonEmpty(Application.loadResource(id));
         } catch (ex) {
+            lastBakedError = ex.getErrorMessage();
             return null;
         }
     }
