@@ -1,1 +1,9 @@
 project.manifest = manifest.xml
+
+# Explicit, not the default (which recursively globs the whole project
+# root) - without this, watch/.personal-build/ (build_personal.sh's
+# gitignored copy of this whole tree, used since Garmin Connect Mobile's
+# app-settings screen doesn't work for a sideloaded app - see that script)
+# gets picked up too, duplicating every class definition.
+base.sourcePath = source
+base.resourcePath = resources

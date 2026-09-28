@@ -5,6 +5,12 @@ import Toybox.WatchUi;
 // Shown instead of DiagnosticView once Phase 1's debug scaffolding is
 // retired: a plain scrollable-by-select list of the last 10 achievements
 // (PendingQueue.history()), tier-coloured. Selecting one replays it.
+//
+// Uses TextWrap/Wave.fitFont (from anim/, originally built for the pixel
+// fonts) to keep every line inside the round screen - both work fine with
+// system fonts too, since they just measure dc.getTextWidthInPixels. Found
+// the hard way: fixed-position center-justified text with no wrap/fit check
+// clips at both edges for anything longer than a few words.
 class HallOfShameView extends WatchUi.View {
 
     private var _items as Array<Dictionary>;
@@ -33,6 +39,7 @@ class HallOfShameView extends WatchUi.View {
 
         var w = dc.getWidth();
         var h = dc.getHeight();
+        var maxWidth = (w * 0.82).toNumber(); // safe content width, matches AchievementView's approach
 
         if (_items.size() == 0) {
             dc.drawText(w / 2, h * 0.44, Graphics.FONT_SMALL, "No achievements yet",
@@ -44,26 +51,35 @@ class HallOfShameView extends WatchUi.View {
         }
 
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_BLACK);
-        dc.drawText(w / 2, h * 0.14, Graphics.FONT_XTINY,
+        dc.drawText(w / 2, h * 0.12, Graphics.FONT_XTINY,
             "HALL OF SHAME " + (_index + 1) + "/" + _items.size(),
             Graphics.TEXT_JUSTIFY_CENTER);
 
         var item = _items[_index];
         var tier = item.hasKey("tier") ? item["tier"] as String : "common";
         dc.setColor(colorFor(tier), Graphics.COLOR_BLACK);
-        dc.drawText(w / 2, h * 0.36, Graphics.FONT_TINY, tier.toUpper(),
+        dc.drawText(w / 2, h * 0.24, Graphics.FONT_TINY, tier.toUpper(),
             Graphics.TEXT_JUSTIFY_CENTER);
 
+        // Title can run long ("Personal Record, Allegedly") - wrap to up to
+        // 2 lines instead of clipping off the round screen's edges.
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         var title = item.hasKey("title") ? item["title"] as String : "";
-        dc.drawText(w / 2, h * 0.48, Graphics.FONT_SMALL, title, Graphics.TEXT_JUSTIFY_CENTER);
+        var titleLines = TextWrap.wrap(dc, title, Graphics.FONT_SMALL, maxWidth);
+        var titleLineHeight = dc.getFontHeight(Graphics.FONT_SMALL) + 2;
+        var y = h * 0.36;
+        for (var i = 0; i < titleLines.size() && i < 2; i++) {
+            dc.drawText(w / 2, y, Graphics.FONT_SMALL, titleLines[i], Graphics.TEXT_JUSTIFY_CENTER);
+            y += titleLineHeight;
+        }
 
         var stat = item.hasKey("stat") ? item["stat"] as String : "";
-        dc.drawText(w / 2, h * 0.62, Graphics.FONT_MEDIUM, stat, Graphics.TEXT_JUSTIFY_CENTER);
+        var statFont = Wave.fitFont(dc, stat, [Graphics.FONT_MEDIUM, Graphics.FONT_SMALL, Graphics.FONT_TINY], maxWidth);
+        dc.drawText(w / 2, y + 8, statFont, stat, Graphics.TEXT_JUSTIFY_CENTER);
 
         dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_BLACK);
-        dc.drawText(w / 2, h * 0.84, Graphics.FONT_XTINY, "SELECT replay * MENU diag",
-            Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(w / 2, h * 0.82, Graphics.FONT_XTINY, "SELECT replay", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(w / 2, h * 0.89, Graphics.FONT_XTINY, "MENU diagnostics", Graphics.TEXT_JUSTIFY_CENTER);
     }
 
     function onHide() as Void {
