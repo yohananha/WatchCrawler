@@ -82,7 +82,7 @@ app.MapGet("/", () => Results.Content("""
     <body style="font-family:system-ui,sans-serif;max-width:480px;margin:48px auto;padding:0 16px">
         <h2>WatchCrawler test trigger</h2>
         <p>Arms a real LLM-generated test achievement. Your watch picks it up on its next
-        background check - usually within 5 minutes.</p>
+        background check. Garmin schedules these loosely, so expect anywhere from 5 to 30 minutes.</p>
         <input type="password" id="key" placeholder="Shared key" autocomplete="off"
                style="width:100%;padding:8px;box-sizing:border-box;font-size:16px">
         <button onclick="trigger()" style="margin-top:10px;padding:10px 18px;font-size:16px">
@@ -97,7 +97,7 @@ app.MapGet("/", () => Results.Content("""
                 try {
                     var res = await fetch('/trigger-test', { method: 'POST', headers: { 'X-Watch-Key': key } });
                     result.textContent = res.ok
-                        ? 'Armed! Check your watch in a few minutes.'
+                        ? 'Armed! Check your watch in 5-30 minutes.'
                         : 'Failed (' + res.status + '). Check the shared key.';
                 } catch (e) {
                     result.textContent = 'Request failed: ' + e;

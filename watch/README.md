@@ -53,8 +53,8 @@ server URL must be HTTPS. Fly.io (see `../server/fly.toml`) provides this automa
 ## Remote test trigger
 
 No physical button needed: visit the server's `/` page (e.g. `https://watchcrawler.fly.dev/`),
-enter the shared key, click **Trigger test achievement**. The watch's background check (every
-~5 min) polls for this and, if armed, runs a real request through the LLM server — same code path
+enter the shared key, click **Trigger test achievement**. The watch's background check (requested every 5 min, but Garmin schedules these loosely - expect 5-30 min)
+polls for this and, if armed, runs a real request through the LLM server — same code path
 as a genuine detected activity. See `server/Program.cs` (`/trigger-test*`) and
 `watch/source/TriggerChecker.mc`.
 

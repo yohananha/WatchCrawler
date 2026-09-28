@@ -19,6 +19,15 @@ primary_region = "iad"               # pick the region closest to you
 
 [env]
   PORT = "8080"
+  # The remote test trigger's armed flag is a file on this volume, not
+  # process memory - Fly wipes memory on every idle stop, which silently
+  # lost armed triggers. Create once: fly volumes create trigger_data
+  # --region iad --size 1 --app watchcrawler
+  TRIGGER_STATE_PATH = "/data/trigger.flag"
+
+[mounts]
+  source = "trigger_data"
+  destination = "/data"
 
 [[vm]]
   cpu_kind = "shared"
