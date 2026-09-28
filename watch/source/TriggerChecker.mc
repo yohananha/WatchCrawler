@@ -1,7 +1,9 @@
+import Toybox.Application;
 import Toybox.Communications;
 import Toybox.Lang;
 import Toybox.PersistedContent;
 import Toybox.System;
+import Toybox.Time;
 
 // Polls POST <serverUrl>/trigger-test/consume on the background timer, so a
 // test achievement armed from a browser (the server's own "/" page) or curl
@@ -33,6 +35,15 @@ class TriggerChecker {
     function checkAndConsume(callback as Method) as Void {
         _callback = callback;
 
+        // Server said the feature is off: don't wake it every cycle. Cleared
+        // whenever the app is opened (AchievementApp.onStart).
+        var skipUntil = Application.Storage.getValue("triggerSkipUntil");
+        if (skipUntil instanceof Number && Time.now().value() < skipUntil) {
+            BgStatus.setTrigger("skipped (server has test trigger off)");
+            finish(false);
+            return;
+        }
+
         var url = Config.serverUrl();
         if (url == null) {
             BgStatus.setTrigger("no serverUrl (" + Config.describe() + ")");
@@ -62,6 +73,12 @@ class TriggerChecker {
     }
 
     function onResponse(responseCode as Number, data as Null or Dictionary or String or PersistedContent.Iterator) as Void {
+        if (responseCode == 200 && data instanceof Dictionary && data["enabled"] == false) {
+            Application.Storage.setValue("triggerSkipUntil", Time.now().value() + 6 * 3600);
+            BgStatus.setTrigger("HTTP 200 test trigger off on server");
+            finish(false);
+            return;
+        }
         if (responseCode == 200 && data instanceof Dictionary && data["wasArmed"] == true) {
             BgStatus.setTrigger("HTTP 200 wasArmed=true");
             finish(true);

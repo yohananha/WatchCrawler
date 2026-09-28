@@ -16,6 +16,7 @@ class AchievementApp extends Application.AppBase {
     }
 
     function onStart(state as Dictionary?) as Void {
+        Application.Storage.deleteValue("triggerSkipUntil"); // re-check the server's test-trigger flag
         Config.mirrorToStorage(); // background can't reliably read Properties - see Config
         // Background checks run every 5 minutes. Deliberately NOT calling
         // UserProfile.getUserActivityHistory() here (first-run priming is

@@ -19,6 +19,9 @@ primary_region = "iad"               # pick the region closest to you
 
 [env]
   PORT = "8080"
+  # Remote test trigger (arming page + watch polling). Set to "false" or
+  # remove once you are done testing achievements.
+  ENABLE_TEST_TRIGGER = "true"
   # The remote test trigger's armed flag is a file on this volume, not
   # process memory - Fly wipes memory on every idle stop, which silently
   # lost armed triggers. Create once: fly volumes create trigger_data

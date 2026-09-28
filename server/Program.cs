@@ -75,25 +75,42 @@ if (!string.IsNullOrEmpty(watchKey))
 
 app.MapGet("/health", () => Results.Ok("ok"));
 
+// ENABLE_TEST_TRIGGER=true turns the remote test trigger on. Off by default so
+// a production deploy doesn't expose it (or get woken by the watch polling
+// for it). When off, /trigger-test* refuses and /trigger-test/consume tells
+// the watch {enabled:false} so it stops polling for a while.
+var testTriggerEnabled = string.Equals(
+    Environment.GetEnvironmentVariable("ENABLE_TEST_TRIGGER"), "true", StringComparison.OrdinalIgnoreCase);
+
 // Remote test trigger: arm here (browser page below, or curl), the watch's
 // background check consumes it on its next 5-min tick and runs it through
 // the real AchievementGenerator, same as a genuine detected activity - see
 // watch/source/TriggerChecker.mc and BackgroundService.mc.
 app.MapPost("/trigger-test", (ILogger<Program> log) =>
 {
+    if (!testTriggerEnabled) return TriggerDisabled();
     TestTrigger.Arm();
     log.LogInformation("Test trigger ARMED");
     return Results.Ok(new { armed = true });
 });
 
-app.MapGet("/trigger-test", () => Results.Ok(new { armed = TestTrigger.IsArmed() }));
+app.MapGet("/trigger-test", () =>
+    testTriggerEnabled ? Results.Ok(new { armed = TestTrigger.IsArmed() }) : TriggerDisabled());
 
 app.MapPost("/trigger-test/consume", (ILogger<Program> log) =>
 {
+    if (!testTriggerEnabled)
+    {
+        log.LogInformation("Watch polled trigger: feature disabled");
+        return Results.Ok(new { wasArmed = false, enabled = false });
+    }
     var wasArmed = TestTrigger.ConsumeIfArmed();
     log.LogInformation("Watch polled trigger: wasArmed={WasArmed}", wasArmed);
-    return Results.Ok(new { wasArmed });
+    return Results.Ok(new { wasArmed, enabled = true });
 });
+
+static IResult TriggerDisabled() =>
+    Results.Json(new { error = "Test trigger disabled (set ENABLE_TEST_TRIGGER=true)." }, statusCode: StatusCodes.Status403Forbidden);
 
 // Unauthenticated on purpose (the key goes in the page's own field, sent as
 // a header via fetch() below) - this is just the HTML shell.
