@@ -8,7 +8,7 @@ namespace GarminAchievements;
 public static class TierCalculator
 {
     private static readonly HashSet<string> AlwaysFailure =
-        new(StringComparer.OrdinalIgnoreCase) { "sedentary", "body_battery_low", "goal_missed" };
+        new(StringComparer.OrdinalIgnoreCase) { "sedentary", "body_battery_low", "goal_missed", "no_achievement_today" };
 
     public static (Tier Tier, double? Z) Compute(GameEvent e)
     {
@@ -78,6 +78,8 @@ public static class PromptBuilder
             - Every achievement has a short punchy title (like a video-game achievement name), a 1-2 sentence
               commentary, and a fake reward line that is usually useless, backhanded or withheld.
             - Tier "cursed" means the player did worse than usual: mock them with a sarcastic "award" for failing.
+            - Event "no_achievement_today" means the player achieved nothing at all today. Roast the empty day
+              (use the steps count if given), never the person's body. Always tier "cursed".
             - Higher tiers are genuine wins: still sarcastic, but grudgingly impressed.
             - Use the actual numbers and context you are given. Specific beats generic.
             - Write original lines only. Never quote or reuse lines from any book, show or game.

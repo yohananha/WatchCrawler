@@ -45,6 +45,7 @@ public class TierCalculatorTests
     [InlineData("sedentary")]
     [InlineData("body_battery_low")]
     [InlineData("goal_missed")]
+    [InlineData("no_achievement_today")]
     [InlineData("SEDENTARY")] // case-insensitive
     public void Compute_AlwaysFailureTypes_AreAlwaysCursedRegardlessOfValue(string type)
     {

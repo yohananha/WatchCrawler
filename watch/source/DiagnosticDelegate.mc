@@ -18,7 +18,7 @@ class DiagnosticDelegate extends WatchUi.BehaviorDelegate {
     // :test is a hardcoded joke achievement (see ActivityDetector.buildFakeAchievement)
     // for instantly confirming the notify->queue->view->sound pipeline works,
     // independent of tier math or the Phase 2 server.
-    private static const TIERS = [:common, :rare, :epic, :legendary, :cursed, :test];
+    private static const TIERS = [:common, :rare, :epic, :legendary, :cursed, :test, :idle];
 
     function initialize() {
         BehaviorDelegate.initialize();

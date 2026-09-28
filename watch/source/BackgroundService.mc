@@ -43,6 +43,12 @@ class BackgroundService extends System.ServiceDelegate {
         BgStatus.mark("trigger not armed -> detecting");
         var core = ActivityDetector.detectCoreEvent();
         if (core == null) {
+            core = IdleDayChecker.checkForIdleDay();
+            if (core != null) {
+                BgStatus.mark("idle day -> resolving");
+                AchievementResolver.get().resolve(core, method(:onResolved));
+                return;
+            }
             BgStatus.mark("done: no new activity");
             Background.exit(false);
             return;
@@ -53,6 +59,9 @@ class BackgroundService extends System.ServiceDelegate {
     }
 
     function onResolved(achievement as Dictionary) as Void {
+        if (achievement.hasKey("hero") && achievement["hero"] != "IDLE") {
+            IdleDayChecker.noteAchievement(); // the idle roast itself doesn't count as an achievement
+        }
         PendingQueue.push(achievement);
         var result = Notifier.notifyAchievement(achievement);
         BgStatus.mark("done: notified (" + result + ")");

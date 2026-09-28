@@ -101,6 +101,10 @@ class ActivityDetector {
             };
         }
 
+        if (tier == :idle) {
+            return IdleDayChecker.buildCore();
+        }
+
         var durationSec = 1500; // ~common, 5km @ 5:00/km
         if (tier == :cursed) { durationSec = 2100; }
         else if (tier == :rare) { durationSec = 1400; }

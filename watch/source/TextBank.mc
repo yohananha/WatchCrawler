@@ -1,6 +1,7 @@
 import Toybox.Application;
 import Toybox.Lang;
 import Toybox.Math;
+import Toybox.Time;
 
 // Local, fully offline fallback text (Phase 1 - Phase 2 swaps this for the
 // LLM server, keeping the same [title, text, reward] shape and the same
@@ -38,6 +39,19 @@ class TextBank {
         ["Personal Record, Allegedly", "$1$ km in $2$. We had to check the sensors twice.", "One smug nod. Redeemable never."],
         ["The System Is Impressed", "Pace $3$/km on a $4$. That almost never happens.", "A laurel wreath made of recycled excuses."],
     ];
+
+    private static const IDLE = [
+        ["Achievement Recorded: None", "You did nothing today. The System noticed, and so did your watch.", "One empty trophy case."],
+        ["A Day Of Pure Potential", "Zero achievements. Potential is doing all the work here.", "Tomorrow, allegedly."],
+        ["Horizontal Excellence", "The couch reports a personal best in you not moving.", "A participation trophy for lying down."],
+    ];
+
+    // Local fallback for the "no achievement today" event.
+    static function pickIdle() as [String, String, String] {
+        var day = Time.now().value() / 86400;
+        var e = IDLE[day % IDLE.size()];
+        return [e[0], e[1], e[2]];
+    }
 
     // Returns [title, text, reward] for the given tier, formatted with the
     // supplied numbers/sport.
