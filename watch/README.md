@@ -23,18 +23,40 @@ simulator.exe &            # from the SDK's bin/ directory
 monkeydo bin/achievements.prg fenix847mm
 ```
 
-On first open you'll see a diagnostic screen (capability probes). **MENU**/tap cycles through fake
-achievements per tier (including a `Token Wasted Successfully` sanity check that skips the server
-entirely) via `DebugInjector`; **SELECT** opens the Hall of Shame once the queue is empty.
+The default home screen is the **Hall of Shame** (your achievement history — empty on first run).
+**MENU** from there opens a diagnostic screen (capability probes); **MENU**/tap on *that* screen
+cycles through fake achievements per tier via `DebugInjector` (including a `Token Wasted
+Successfully` sanity check that skips the server entirely), **SELECT** goes back.
 
 ## Configuring the server
 
-Server URL and shared key are read from Connect IQ app settings (`resources/properties`,
-`resources/settings`) — set via Garmin Connect Mobile once installed, or the simulator's own
-Settings editor. Empty `serverUrl` = fully offline (local `TextBank` only, no network call at all).
+Server URL and shared key are `Application.Properties`, normally set via Garmin Connect Mobile's
+app-settings screen — **except that only works for apps published through the Connect IQ Store.**
+A sideloaded/private app (this one) shows **"No settings"** in GCM, confirmed by testing. Two ways
+around it:
+
+- **Simulator:** its own Settings editor works fine for local dev/testing.
+- **Real watch:** use `tools/build_personal.sh` — bakes your real values into a build without ever
+  writing them into the tracked `resources/properties/properties.xml` (which stays empty/safe):
+  ```bash
+  export WATCHCRAWLER_SERVER_URL=https://watchcrawler.fly.dev
+  export WATCHCRAWLER_SHARED_KEY=<your WATCH_SHARED_KEY>
+  tools/build_personal.sh fenix847mm
+  # copy .personal-build/bin/achievements.prg to GARMIN/Apps/achievements.prg
+  ```
+
+Empty `serverUrl` = fully offline (local `TextBank` only, no network call at all).
 
 **Note:** Connect IQ refuses plain HTTP (`SECURE_CONNECTION_REQUIRED`, response code -1001) — the
 server URL must be HTTPS. Fly.io (see `../server/fly.toml`) provides this automatically.
+
+## Remote test trigger
+
+No physical button needed: visit the server's `/` page (e.g. `https://watchcrawler.fly.dev/`),
+enter the shared key, click **Trigger test achievement**. The watch's background check (every
+~5 min) polls for this and, if armed, runs a real request through the LLM server — same code path
+as a genuine detected activity. See `server/Program.cs` (`/trigger-test*`) and
+`watch/source/TriggerChecker.mc`.
 
 ## Fonts
 

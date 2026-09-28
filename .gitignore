@@ -14,6 +14,11 @@ archive/
 watch/bin/
 watch/gen/
 
+# Personal build (real serverUrl/sharedKey baked in via build_personal.sh -
+# see that script's header for why this is needed instead of Garmin Connect
+# Mobile's app settings)
+watch/.personal-build/
+
 # Developer signing key (never commit)
 *.der
 *.p12
