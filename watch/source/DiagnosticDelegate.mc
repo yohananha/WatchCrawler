@@ -35,8 +35,9 @@ class DiagnosticDelegate extends WatchUi.BehaviorDelegate {
     function onSelect() as Boolean {
         var next = PendingQueue.popNext();
         if (next == null) {
-            var hof = new HallOfShameView();
-            WatchUi.pushView(hof, new HallOfShameDelegate(hof), WatchUi.SLIDE_LEFT);
+            // Back to the Hall of Shame that pushed this view - DiagnosticView
+            // is no longer the default home screen, it's reached from there.
+            WatchUi.popView(WatchUi.SLIDE_RIGHT);
             return true;
         }
         WatchUi.pushView(new AchievementView(next), new AchievementDelegate(), WatchUi.SLIDE_LEFT);

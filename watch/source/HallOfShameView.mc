@@ -35,8 +35,11 @@ class HallOfShameView extends WatchUi.View {
         var h = dc.getHeight();
 
         if (_items.size() == 0) {
-            dc.drawText(w / 2, h / 2, Graphics.FONT_SMALL, "No achievements yet",
-                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(w / 2, h * 0.44, Graphics.FONT_SMALL, "No achievements yet",
+                Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_BLACK);
+            dc.drawText(w / 2, h * 0.56, Graphics.FONT_XTINY, "MENU = diagnostics",
+                Graphics.TEXT_JUSTIFY_CENTER);
             return;
         }
 
@@ -59,7 +62,7 @@ class HallOfShameView extends WatchUi.View {
         dc.drawText(w / 2, h * 0.62, Graphics.FONT_MEDIUM, stat, Graphics.TEXT_JUSTIFY_CENTER);
 
         dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_BLACK);
-        dc.drawText(w / 2, h * 0.84, Graphics.FONT_XTINY, "UP/DOWN browse * SELECT replay",
+        dc.drawText(w / 2, h * 0.84, Graphics.FONT_XTINY, "SELECT replay * MENU diag",
             Graphics.TEXT_JUSTIFY_CENTER);
     }
 

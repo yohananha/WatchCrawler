@@ -5,10 +5,10 @@ import Toybox.System;
 import Toybox.Time;
 import Toybox.WatchUi;
 
-// Phase 0 scaffold: verifies the SDK/toolchain and probes the APIs the real
-// app depends on (Notifications, Background, ActivityMonitor history, Storage).
-// The DiagnosticView shows what this device actually supports; nothing here
-// is the final UX (see the plan's Phase 1 for the real animation + detector).
+// Hall of Shame is the real home screen (nothing pending -> your achievement
+// history). DiagnosticView (capability probes + the debug tier injector)
+// is reachable from there via MENU - kept for ongoing testing, not the
+// default anymore now that Phases 1/2 are working end to end.
 class AchievementApp extends Application.AppBase {
 
     function initialize() {
@@ -38,7 +38,8 @@ class AchievementApp extends Application.AppBase {
             var next = PendingQueue.popNext();
             return [ new AchievementView(next as Dictionary), new AchievementDelegate() ];
         }
-        return [ new DiagnosticView(), new DiagnosticDelegate() ];
+        var hof = new HallOfShameView();
+        return [ hof, new HallOfShameDelegate(hof) ];
     }
 
     // Called when a background temporal event fires.

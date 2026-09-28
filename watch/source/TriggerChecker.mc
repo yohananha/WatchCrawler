@@ -1,0 +1,78 @@
+import Toybox.Communications;
+import Toybox.Lang;
+import Toybox.PersistedContent;
+import Toybox.System;
+
+// Polls POST <serverUrl>/trigger-test/consume on the background timer, so a
+// test achievement armed from a browser (the server's own "/" page) or curl
+// fires within one background cycle (~5 min) with no button press needed -
+// Connect IQ has no server-to-watch push for a private/sideloaded app, so
+// polling on the tick we already have is the only option. See
+// BackgroundService for where this is called, only when no real activity
+// was detected that cycle.
+//
+// Singleton instance for the same reason as AchievementResolver: method(:sym)
+// needs a `self` to bind to.
+(:background)
+class TriggerChecker {
+    private static var _instance as TriggerChecker?;
+
+    static function get() as TriggerChecker {
+        if (_instance == null) {
+            _instance = new TriggerChecker();
+        }
+        return _instance as TriggerChecker;
+    }
+
+    private var _callback as Method?;
+
+    function initialize() {
+    }
+
+    // callback: method(armed as Boolean) as Void
+    function checkAndConsume(callback as Method) as Void {
+        _callback = callback;
+
+        var url = Config.serverUrl();
+        if (url == null) {
+            finish(false);
+            return;
+        }
+
+        var headers = {};
+        var key = Config.sharedKey();
+        if (key != null) {
+            headers.put("X-Watch-Key", key as String);
+        }
+
+        var options = {
+            :method => Communications.HTTP_REQUEST_METHOD_POST,
+            :headers => headers,
+            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON,
+        };
+
+        try {
+            Communications.makeWebRequest((url as String) + "/trigger-test/consume", {}, options, method(:onResponse));
+        } catch (ex) {
+            System.println("[TRIG] makeWebRequest threw: " + ex.getErrorMessage());
+            finish(false);
+        }
+    }
+
+    function onResponse(responseCode as Number, data as Null or Dictionary or String or PersistedContent.Iterator) as Void {
+        if (responseCode == 200 && data instanceof Dictionary && data["wasArmed"] == true) {
+            System.println("[TRIG] remote test armed");
+            finish(true);
+        } else {
+            finish(false);
+        }
+    }
+
+    private function finish(armed as Boolean) as Void {
+        var cb = _callback;
+        _callback = null;
+        if (cb != null) {
+            cb.invoke(armed);
+        }
+    }
+}

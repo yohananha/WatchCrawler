@@ -27,4 +27,11 @@ class HallOfShameDelegate extends WatchUi.BehaviorDelegate {
         }
         return true;
     }
+
+    // Debug/diagnostics screen (capability probes, tier injector) is a menu
+    // away now that it's no longer the default home screen.
+    function onMenu() as Boolean {
+        WatchUi.pushView(new DiagnosticView(), new DiagnosticDelegate(), WatchUi.SLIDE_LEFT);
+        return true;
+    }
 }

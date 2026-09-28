@@ -40,8 +40,9 @@ if (!string.IsNullOrEmpty(watchKey))
 {
     app.Use(async (context, next) =>
     {
-        if (context.Request.Path.StartsWithSegments("/achievement")
-            && context.Request.Headers["X-Watch-Key"] != watchKey)
+        var isProtected = context.Request.Path.StartsWithSegments("/achievement")
+            || context.Request.Path.StartsWithSegments("/trigger-test");
+        if (isProtected && context.Request.Headers["X-Watch-Key"] != watchKey)
         {
             // JSON, not plain text: the watch requests
             // HTTP_RESPONSE_CONTENT_TYPE_JSON and can't parse a text body,
@@ -57,6 +58,55 @@ if (!string.IsNullOrEmpty(watchKey))
 }
 
 app.MapGet("/health", () => Results.Ok("ok"));
+
+// Remote test trigger: arm here (browser page below, or curl), the watch's
+// background check consumes it on its next 5-min tick and runs it through
+// the real AchievementGenerator, same as a genuine detected activity - see
+// watch/source/TriggerChecker.mc and BackgroundService.mc.
+app.MapPost("/trigger-test", () =>
+{
+    TestTrigger.Arm();
+    return Results.Ok(new { armed = true });
+});
+
+app.MapGet("/trigger-test", () => Results.Ok(new { armed = TestTrigger.IsArmed() }));
+
+app.MapPost("/trigger-test/consume", () => Results.Ok(new { wasArmed = TestTrigger.ConsumeIfArmed() }));
+
+// Unauthenticated on purpose (the key goes in the page's own field, sent as
+// a header via fetch() below) - this is just the HTML shell.
+app.MapGet("/", () => Results.Content("""
+    <!doctype html>
+    <html>
+    <head><meta charset="utf-8"><title>WatchCrawler</title></head>
+    <body style="font-family:system-ui,sans-serif;max-width:480px;margin:48px auto;padding:0 16px">
+        <h2>WatchCrawler test trigger</h2>
+        <p>Arms a real LLM-generated test achievement. Your watch picks it up on its next
+        background check - usually within 5 minutes.</p>
+        <input type="password" id="key" placeholder="Shared key" autocomplete="off"
+               style="width:100%;padding:8px;box-sizing:border-box;font-size:16px">
+        <button onclick="trigger()" style="margin-top:10px;padding:10px 18px;font-size:16px">
+            Trigger test achievement
+        </button>
+        <p id="result" style="margin-top:12px"></p>
+        <script>
+            async function trigger() {
+                var key = document.getElementById('key').value;
+                var result = document.getElementById('result');
+                result.textContent = 'Arming...';
+                try {
+                    var res = await fetch('/trigger-test', { method: 'POST', headers: { 'X-Watch-Key': key } });
+                    result.textContent = res.ok
+                        ? 'Armed! Check your watch in a few minutes.'
+                        : 'Failed (' + res.status + '). Check the shared key.';
+                } catch (e) {
+                    result.textContent = 'Request failed: ' + e;
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """, "text/html"));
 
 app.MapPost("/achievement", async (
     GameEvent e,

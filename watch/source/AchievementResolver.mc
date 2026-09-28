@@ -44,7 +44,7 @@ class AchievementResolver {
         _core = core;
         _callback = callback;
 
-        var url = configString("serverUrl");
+        var url = Config.serverUrl();
         System.println("[SRV] serverUrl=" + (url == null ? "(null)" : url));
         if (url == null) {
             finishWithFallback();
@@ -61,7 +61,7 @@ class AchievementResolver {
         };
 
         var headers = { "Content-Type" => Communications.REQUEST_CONTENT_TYPE_JSON };
-        var key = configString("sharedKey");
+        var key = Config.sharedKey();
         if (key != null) {
             headers.put("X-Watch-Key", key as String);
         }
@@ -131,14 +131,4 @@ class AchievementResolver {
         }
     }
 
-    private function configString(key as String) as String? {
-        if (!(Toybox.Application has :Properties)) {
-            return null;
-        }
-        var v = Application.Properties.getValue(key);
-        if (v == null || !(v instanceof String) || (v as String).length() == 0) {
-            return null;
-        }
-        return v as String;
-    }
 }
