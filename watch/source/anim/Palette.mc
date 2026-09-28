@@ -34,4 +34,15 @@ class Palette {
         if (tier == :legendary) { return 0xFFD83D; }
         return 0xCCCCCC;
     }
+
+    // [light, dark] pairs for a single tier-coloured line + drop shadow
+    // (Hall of Shame). Matches the user's Claude Design "Hall of Shame v2"
+    // mockup's TIERS palette.
+    static function tierColorPair(tier as Symbol) as Array<Number> {
+        if (tier == :cursed) { return [0xFF8A8A, 0x7A1F2A]; }
+        if (tier == :rare) { return [0x8EEBFF, 0x1F6E85]; }
+        if (tier == :epic) { return [0xCDB0FF, 0x4B2A99]; }
+        if (tier == :legendary) { return [0xFFE08A, 0x8A6414]; }
+        return [0xD4D4DC, 0x56565F];
+    }
 }

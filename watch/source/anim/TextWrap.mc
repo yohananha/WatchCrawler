@@ -31,7 +31,8 @@ class TextWrap {
         return lines;
     }
 
-    private static function splitWords(text as String) as Array<String> {
+    // Public: reused by ChordFit for its own word-by-word packing.
+    static function splitWords(text as String) as Array<String> {
         var words = [] as Array<String>;
         var current = "";
         for (var i = 0; i < text.length(); i++) {

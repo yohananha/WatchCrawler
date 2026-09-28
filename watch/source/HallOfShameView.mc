@@ -2,19 +2,23 @@ import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.WatchUi;
 
-// Shown instead of DiagnosticView once Phase 1's debug scaffolding is
-// retired: a plain scrollable-by-select list of the last 10 achievements
-// (PendingQueue.history()), tier-coloured. Selecting one replays it.
+// Ported from the user's Claude Design mockup ("Hall of Shame v2"): pixel
+// fonts (matching the achievement popup) with every line fit against the
+// circle's REAL chord width at its own y via ChordFit - not TextWrap's
+// fixed-maxWidth approximation, which is what clipped "Personal Record,
+// Allegedly" on the real device earlier. Position/tier at top, title
+// auto-fit in the middle band, stat below it, control hints at the bottom.
 //
-// Uses TextWrap/Wave.fitFont (from anim/, originally built for the pixel
-// fonts) to keep every line inside the round screen - both work fine with
-// system fonts too, since they just measure dc.getTextWidthInPixels. Found
-// the hard way: fixed-position center-justified text with no wrap/fit check
-// clips at both edges for anything longer than a few words.
+// Font sizes are coarser than the mockup's (32/28/24/20/18/16 continuous
+// vs our discrete Px16/24/30/38/46/56 bitmap fonts, generated per-size
+// since Connect IQ can't scale text) - close in spirit, not pixel-identical.
 class HallOfShameView extends WatchUi.View {
+    private const SAFE_RADIUS = 196; // matches the mockup's tuned value against the dot ring
 
     private var _items as Array<Dictionary>;
     private var _index as Number = 0;
+
+    private var _fPx16, _fPx24, _fPx30, _fPx38, _fSk18, _fSk22;
 
     function initialize() {
         View.initialize();
@@ -28,6 +32,12 @@ class HallOfShameView extends WatchUi.View {
     }
 
     function onLayout(dc as Dc) as Void {
+        _fPx16 = WatchUi.loadResource(Rez.Fonts.Px16);
+        _fPx24 = WatchUi.loadResource(Rez.Fonts.Px24);
+        _fPx30 = WatchUi.loadResource(Rez.Fonts.Px30);
+        _fPx38 = WatchUi.loadResource(Rez.Fonts.Px38);
+        _fSk18 = WatchUi.loadResource(Rez.Fonts.Sk18);
+        _fSk22 = WatchUi.loadResource(Rez.Fonts.Sk22);
     }
 
     function onShow() as Void {
@@ -37,49 +47,36 @@ class HallOfShameView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
         dc.clear();
 
-        var w = dc.getWidth();
-        var h = dc.getHeight();
-        var maxWidth = (w * 0.82).toNumber(); // safe content width, matches AchievementView's approach
+        var cx = dc.getWidth() / 2;
+        var cy = dc.getHeight() / 2;
 
         if (_items.size() == 0) {
-            dc.drawText(w / 2, h * 0.44, Graphics.FONT_SMALL, "No achievements yet",
-                Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_BLACK);
-            dc.drawText(w / 2, h * 0.56, Graphics.FONT_XTINY, "MENU = diagnostics",
-                Graphics.TEXT_JUSTIFY_CENTER);
+            drawEmptyState(dc, cx, cy);
             return;
         }
 
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_BLACK);
-        dc.drawText(w / 2, h * 0.12, Graphics.FONT_XTINY,
-            "HALL OF SHAME " + (_index + 1) + "/" + _items.size(),
-            Graphics.TEXT_JUSTIFY_CENTER);
-
         var item = _items[_index];
         var tier = item.hasKey("tier") ? item["tier"] as String : "common";
-        dc.setColor(colorFor(tier), Graphics.COLOR_BLACK);
-        dc.drawText(w / 2, h * 0.24, Graphics.FONT_TINY, tier.toUpper(),
-            Graphics.TEXT_JUSTIFY_CENTER);
+        var pair = Palette.tierColorPair(Baseline.tierFromName(tier));
 
-        // Title can run long ("Personal Record, Allegedly") - wrap to up to
-        // 2 lines instead of clipping off the round screen's edges.
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+        drawShadowedLine(dc, "" + (_index + 1) + "/" + _items.size(), cx, 48, _fPx16, [0x9A9AA4, 0x000000]);
+        drawShadowedLine(dc, tier.toUpper(), cx, 78, _fPx24, pair);
+
         var title = item.hasKey("title") ? item["title"] as String : "";
-        var titleLines = TextWrap.wrap(dc, title, Graphics.FONT_SMALL, maxWidth);
-        var titleLineHeight = dc.getFontHeight(Graphics.FONT_SMALL) + 2;
-        var y = h * 0.36;
-        for (var i = 0; i < titleLines.size() && i < 2; i++) {
-            dc.drawText(w / 2, y, Graphics.FONT_SMALL, titleLines[i], Graphics.TEXT_JUSTIFY_CENTER);
-            y += titleLineHeight;
+        var fit = ChordFit.fitBlock(dc, title.toUpper(), 114, 272, [_fPx38, _fPx30, _fPx24, _fPx16], cy, SAFE_RADIUS);
+        var titleFont = fit["font"];
+        var lines = fit["lines"] as Array<Dictionary>;
+        for (var i = 0; i < lines.size(); i++) {
+            var l = lines[i];
+            drawShadowedLine(dc, l["text"] as String, cx, l["top"] as Number, titleFont, pair);
         }
 
         var stat = item.hasKey("stat") ? item["stat"] as String : "";
-        var statFont = Wave.fitFont(dc, stat, [Graphics.FONT_MEDIUM, Graphics.FONT_SMALL, Graphics.FONT_TINY], maxWidth);
-        dc.drawText(w / 2, y + 8, statFont, stat, Graphics.TEXT_JUSTIFY_CENTER);
+        var statFont = ChordFit.fitLine(dc, stat, 286, [_fSk22, _fSk18], cy, SAFE_RADIUS);
+        dc.setColor(0xECECF2, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, 286, statFont, stat, Graphics.TEXT_JUSTIFY_CENTER);
 
-        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_BLACK);
-        dc.drawText(w / 2, h * 0.82, Graphics.FONT_XTINY, "SELECT replay", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.drawText(w / 2, h * 0.89, Graphics.FONT_XTINY, "MENU diagnostics", Graphics.TEXT_JUSTIFY_CENTER);
+        drawHints(dc, cx, cy, ["SELECT replay", "MENU diagnostics"], 0xB4B4BE);
     }
 
     function onHide() as Void {
@@ -102,11 +99,34 @@ class HallOfShameView extends WatchUi.View {
         return _items[_index];
     }
 
-    private function colorFor(tier as String) as Graphics.ColorValue {
-        if (tier.equals("cursed")) { return Graphics.COLOR_RED; }
-        if (tier.equals("rare")) { return Graphics.COLOR_BLUE; }
-        if (tier.equals("epic")) { return Graphics.COLOR_PURPLE; }
-        if (tier.equals("legendary")) { return Graphics.COLOR_YELLOW; }
-        return Graphics.COLOR_LT_GRAY;
+    private function drawEmptyState(dc as Dc, cx as Number, cy as Number) as Void {
+        var fit = ChordFit.fitBlock(dc, "NO ACHIEVEMENTS YET", 140, 290, [_fPx38, _fPx30, _fPx24, _fPx16], cy, SAFE_RADIUS);
+        var font = fit["font"];
+        var lines = fit["lines"] as Array<Dictionary>;
+        var grey = [0xD4D4DC, 0x56565F];
+        for (var i = 0; i < lines.size(); i++) {
+            var l = lines[i];
+            drawShadowedLine(dc, l["text"] as String, cx, l["top"] as Number, font, grey);
+        }
+        drawHints(dc, cx, cy, ["MENU diagnostics"], 0xB4B4BE);
+    }
+
+    private function drawHints(dc as Dc, cx as Number, cy as Number, hints as Array<String>, color as Number) as Void {
+        var y = 330;
+        for (var i = 0; i < hints.size(); i++) {
+            var font = ChordFit.fitLine(dc, hints[i], y, [_fSk18], cy, SAFE_RADIUS);
+            dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, y, font, hints[i], Graphics.TEXT_JUSTIFY_CENTER);
+            y += 28;
+        }
+    }
+
+    // colorPair: [light, dark] - light is the fill, dark is a 2px drop
+    // shadow (matches the achievement popup's pixel-art look).
+    private function drawShadowedLine(dc as Dc, text as String, cx as Number, y as Number, font, colorPair as Array<Number>) as Void {
+        dc.setColor(colorPair[1], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx + 1, y + 2, font, text, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.setColor(colorPair[0], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, y, font, text, Graphics.TEXT_JUSTIFY_CENTER);
     }
 }
