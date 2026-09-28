@@ -35,7 +35,7 @@ class TriggerChecker {
 
         var url = Config.serverUrl();
         if (url == null) {
-            BgStatus.setTrigger("no serverUrl set");
+            BgStatus.setTrigger("no serverUrl (" + Config.describe() + ")");
             finish(false);
             return;
         }

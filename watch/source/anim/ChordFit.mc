@@ -54,6 +54,35 @@ class ChordFit {
         return { "lines" => [{ "text" => text, "top" => top }], "font" => fonts[fonts.size() - 1] };
     }
 
+    // Greedy word-wrap where each successive line's cap is the chord width at
+    // ITS OWN y (startY, startY+lineHeight, ...). For running text like the
+    // diagnostics screen, where there's no fixed band to fit into. A word
+    // wider than the chord is placed on its own line rather than dropped.
+    static function wrapFlow(dc as Dc, text as String, font, startY as Number, lineHeight as Number,
+                              cy as Number, safeRadius as Number) as Array<String> {
+        var words = TextWrap.splitWords(text);
+        var lines = [] as Array<String>;
+        var fontH = dc.getFontHeight(font);
+        var y = startY;
+        var line = "";
+
+        for (var i = 0; i < words.size(); i++) {
+            var candidate = line.length() == 0 ? words[i] : (line + " " + words[i]);
+            var cap = chordWidth(y, y + fontH, cy, safeRadius);
+            if (dc.getTextWidthInPixels(candidate, font) > cap && line.length() > 0) {
+                lines.add(line);
+                y += lineHeight;
+                line = words[i];
+            } else {
+                line = candidate;
+            }
+        }
+        if (line.length() > 0) {
+            lines.add(line);
+        }
+        return lines;
+    }
+
     // Single-line variant (position/tier/stat/hint text): biggest font from
     // `fonts` whose full measured width fits the chord at `y`.
     static function fitLine(dc as Dc, text as String, y as Number, fonts as Array, cy as Number, safeRadius as Number) {

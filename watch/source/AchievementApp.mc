@@ -16,6 +16,7 @@ class AchievementApp extends Application.AppBase {
     }
 
     function onStart(state as Dictionary?) as Void {
+        Config.mirrorToStorage(); // background can't reliably read Properties - see Config
         // Background checks run every 5 minutes. Deliberately NOT calling
         // UserProfile.getUserActivityHistory() here (first-run priming is
         // folded into ActivityDetector.checkForNewActivity() instead, which

@@ -14,6 +14,7 @@ import Toybox.WatchUi;
 // real watch once tapping the notification kept reopening the app. Every
 // notification now only ever fires from an explicit button/tap.
 class DiagnosticView extends WatchUi.View {
+    private var _font;
 
     function initialize() {
         View.initialize();
@@ -29,6 +30,7 @@ class DiagnosticView extends WatchUi.View {
     private static var _selfTested as Boolean = false;
 
     function onLayout(dc as Dc) as Void {
+        _font = WatchUi.loadResource(Rez.Fonts.Sk18);
         System.println("[DIAG] Notif:" + yn(hasSymbol(:Notifications)) + " Bg:" + yn(hasSymbol(:Background))
             + " ActMon:" + yn(hasSymbol(:ActivityMonitor)) + " Hist:" + yn(Toybox.UserProfile has :getUserActivityHistory)
             + " Comm:" + yn(hasSymbol(:Communications)) + " Tone:" + yn(Toybox.Attention has :playTone));
@@ -55,17 +57,40 @@ class DiagnosticView extends WatchUi.View {
 
         var w = dc.getWidth();
         var h = dc.getHeight();
-        var lines = capabilityLines();
-        var font = Graphics.FONT_XTINY;
+        var font = _font;
         var lineHeight = dc.getFontHeight(font) + 2;
+        var safeRadius = 196; // same tuned value Hall of Shame uses
 
-        // Centre the whole block vertically so it can't run off the top/bottom
-        // of a round screen (which is narrower than the middle at every y
-        // except the equator).
-        var y = h / 2 - (lines.size() * lineHeight) / 2;
-        for (var i = 0; i < lines.size(); i++) {
-            dc.drawText(w / 2, y, font, lines[i], Graphics.TEXT_JUSTIFY_CENTER);
-            y += lineHeight;
+        // Wrap every logical line to the circle's real width at its own y
+        // (a long BG/trig line used to run off the round screen). Two
+        // passes: the chord width depends on where the block starts, and
+        // the start depends on how many lines wrapping produces.
+        var logical = capabilityLines();
+        var startY = 70;
+        var flat = [] as Array<String>;
+        for (var pass = 0; pass < 2; pass++) {
+            flat = [] as Array<String>;
+            var y = startY;
+            for (var i = 0; i < logical.size(); i++) {
+                if (logical[i].length() == 0) {
+                    flat.add("");
+                    y += lineHeight;
+                    continue;
+                }
+                var wrapped = ChordFit.wrapFlow(dc, logical[i], font, y, lineHeight, h / 2, safeRadius);
+                for (var j = 0; j < wrapped.size(); j++) {
+                    flat.add(wrapped[j]);
+                    y += lineHeight;
+                }
+            }
+            startY = h / 2 - (flat.size() * lineHeight) / 2;
+            if (startY < 40) { startY = 40; }
+        }
+
+        var y2 = startY;
+        for (var k = 0; k < flat.size(); k++) {
+            dc.drawText(w / 2, y2, font, flat[k], Graphics.TEXT_JUSTIFY_CENTER);
+            y2 += lineHeight;
         }
     }
 
@@ -75,12 +100,12 @@ class DiagnosticView extends WatchUi.View {
     // One line per capability probe, kept short so it survives the circular
     // screen's shrinking chord width near the top/bottom.
     private function capabilityLines() as Array<String> {
-        var lines = ["PHASE 0/1"] as Array<String>;
+        var lines = [] as Array<String>;
 
-        lines.add("Notif:" + yn(hasSymbol(:Notifications)) + " Bg:" + yn(hasSymbol(:Background)));
-        lines.add("ActMon:" + yn(hasSymbol(:ActivityMonitor)) + " Hist:" + yn(Toybox.UserProfile has :getUserActivityHistory));
-        lines.add("Comm:" + yn(hasSymbol(:Communications)) + " Tone:" + yn(Toybox.Attention has :playTone));
-
+        // One flowing line instead of three rows - wrapFlow breaks it to fit.
+        lines.add("Notif:" + yn(hasSymbol(:Notifications)) + " Bg:" + yn(hasSymbol(:Background))
+            + " ActMon:" + yn(hasSymbol(:ActivityMonitor)) + " Hist:" + yn(Toybox.UserProfile has :getUserActivityHistory)
+            + " Comm:" + yn(hasSymbol(:Communications)) + " Tone:" + yn(Toybox.Attention has :playTone));
         lines.add(BgStatus.summary());
         lines.add(BgStatus.triggerSummary());
         lines.add("MENU=inject SELECT=view/back");
