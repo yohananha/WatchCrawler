@@ -63,9 +63,15 @@ class AchievementResolver {
             // Non-activity event (e.g. no_achievement_today): no distance value.
             body = {
                 "type" => core["eventType"],
-                "higherIsBetter" => true,
+                "higherIsBetter" => core.hasKey("higherIsBetter") ? core["higherIsBetter"] : true,
                 "details" => core["details"],
             };
+            if (core.hasKey("value")) {
+                body.put("value", core["value"]);
+                body.put("unit", core["unit"]);
+                body.put("baselineMean", core["baselineMean"]);
+                body.put("baselineStd", core["baselineStd"]);
+            }
         }
 
         var headers = { "Content-Type" => Communications.REQUEST_CONTENT_TYPE_JSON };
@@ -119,7 +125,7 @@ class AchievementResolver {
     private function finishWithFallback() as Void {
         var core = _core as Dictionary;
         var tier = Baseline.tierFromName(core["tier"] as String);
-        var words = core.hasKey("eventType") ? TextBank.pickEvent(core["eventType"] as String) : TextBank.pick(tier, core["km"] as Float, core["durationSec"] as Number,
+        var words = core.hasKey("eventType") ? TextBank.pickEvent(core["eventType"] as String, core["tier"] as String) : TextBank.pick(tier, core["km"] as Float, core["durationSec"] as Number,
             core["pace"] as String, core["hero"] as String);
         var result = {
             "hero" => core["hero"],

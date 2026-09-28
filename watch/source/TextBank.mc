@@ -58,11 +58,38 @@ class TextBank {
         ["Motion Not Found", "Your watch begs you to move. You scrolled past it.", "A pat on the back. Please stand to receive."],
     ];
 
-    // Local fallback for the roast events, rotating by day.
-    static function pickEvent(eventType as String) as [String, String, String] {
+    private static const STEPS_GOAL = [
+        ["Steps: Completed, Somehow", "You hit your step goal. The System checked twice and is suspicious.", "A tiny imaginary parade."],
+        ["Walked Enough, Allegedly", "Step goal reached. Do not let it go to your head, it is only walking.", "One gold star. Wipe clean after use."],
+    ];
+
+    private static const FLOORS_GOAL = [
+        ["Stairs: Conquered", "Your floors goal is done. The elevator feels personally betrayed.", "A very small summit flag."],
+        ["Up, For Once", "You climbed your floors goal. Gravity is reviewing the footage.", "One handrail salute."],
+    ];
+
+    private static const BATTERY_LOW = [
+        ["Running On Fumes", "Body Battery is nearly empty. The System suggests a nap, not a lecture.", "One imaginary charging cable."],
+        ["Critical Battery, Human Edition", "You are at the bottom of the bar. Even the watch is worried.", "A sympathetic beep."],
+    ];
+
+    private static const RHR_GOOD = [
+        ["Heart: Suspiciously Calm", "Resting heart rate is better than usual. Who are you and what did you do with the couch potato?", "One (1) unearned smugness."],
+    ];
+
+    private static const RHR_BAD = [
+        ["Heart: Working Overtime", "Resting heart rate is up on your usual. The System is judging last night.", "A glass of water, unspoken."],
+    ];
+
+    // Local fallback for the non-activity events, rotating by day.
+    static function pickEvent(eventType as String, tierName as String) as [String, String, String] {
         var bank = IDLE;
         if (eventType.equals("goal_missed")) { bank = GOAL_MISSED; }
         else if (eventType.equals("sedentary")) { bank = SEDENTARY; }
+        else if (eventType.equals("steps_goal")) { bank = STEPS_GOAL; }
+        else if (eventType.equals("floors_goal")) { bank = FLOORS_GOAL; }
+        else if (eventType.equals("body_battery_low")) { bank = BATTERY_LOW; }
+        else if (eventType.equals("resting_hr")) { bank = tierName.equals("cursed") ? RHR_BAD : RHR_GOOD; }
         var day = Time.now().value() / 86400;
         var e = bank[day % bank.size()];
         return [e[0], e[1], e[2]];

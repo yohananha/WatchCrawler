@@ -17,6 +17,7 @@
             <iq:uses-permission id="Communications" />
             <iq:uses-permission id="Notifications" />
             <iq:uses-permission id="UserProfile" />
+            <iq:uses-permission id="SensorHistory" />
         </iq:permissions>
 
         <iq:languages>

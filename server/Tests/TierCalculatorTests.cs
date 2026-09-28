@@ -83,4 +83,13 @@ public class TierCalculatorTests
     {
         Assert.Equal(expectedSound, TierCalculator.SoundFor(tier));
     }
+
+    [Theory]
+    [InlineData("steps_goal")]
+    [InlineData("floors_goal")]
+    public void Goal_reached_events_are_always_rare(string type)
+    {
+        var (tier, _) = TierCalculator.Compute(new GameEvent { Type = type });
+        Assert.Equal(Tier.Rare, tier);
+    }
 }

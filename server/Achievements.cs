@@ -10,8 +10,15 @@ public static class TierCalculator
     private static readonly HashSet<string> AlwaysFailure =
         new(StringComparer.OrdinalIgnoreCase) { "sedentary", "body_battery_low", "goal_missed", "no_achievement_today" };
 
+    // Good-news events with no baseline: always a modest win.
+    private static readonly HashSet<string> AlwaysRare =
+        new(StringComparer.OrdinalIgnoreCase) { "steps_goal", "floors_goal" };
+
     public static (Tier Tier, double? Z) Compute(GameEvent e)
     {
+        if (AlwaysRare.Contains(e.Type))
+            return (Tier.Rare, null);
+
         if (AlwaysFailure.Contains(e.Type))
             return (Tier.Cursed, null);
 
@@ -81,6 +88,9 @@ public static class PromptBuilder
             - Event "no_achievement_today" means the player achieved nothing at all today. Roast the empty day
               (use the steps count if given), never the person's body. Always tier "cursed".
             - Event "goal_missed" means the player ended the day under their step goal (details give steps and goal).
+              Event "steps_goal" / "floors_goal" mean the player reached that daily goal: grudging, backhanded praise.
+              Event "body_battery_low" means the Body Battery is nearly empty. Event "resting_hr" compares resting
+              heart rate with the player's usual (lower is better): tier tells you whether to mock or applaud.
               Event "sedentary" means the watch's move bar is maxed out after long inactivity. Roast the
               inactivity, never the body, and give no medical advice.
             - Higher tiers are genuine wins: still sarcastic, but grudgingly impressed.

@@ -45,7 +45,7 @@ class BackgroundService extends System.ServiceDelegate {
         if (core == null) {
             core = DayEvents.checkForDayEvent();
             if (core != null) {
-                BgStatus.mark("day event -> resolving");
+                BgStatus.mark("day event " + core["eventType"] + " -> resolving");
                 AchievementResolver.get().resolve(core, method(:onResolved));
                 return;
             }
@@ -62,6 +62,7 @@ class BackgroundService extends System.ServiceDelegate {
         if (!achievement.hasKey("eventType")) {
             DayEvents.noteAchievement(); // the idle roast itself doesn't count as an achievement
         }
+        DayEvents.noteSent();
         PendingQueue.push(achievement);
         var result = Notifier.notifyAchievement(achievement);
         BgStatus.mark("done: notified (" + result + ")");

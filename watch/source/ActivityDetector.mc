@@ -108,7 +108,19 @@ class ActivityDetector {
             return DayEvents.buildGoalMissed(null);
         }
         if (tier == :sit) {
-            return DayEvents.buildSedentary(null);
+            return DayEvents.buildSedentary();
+        }
+        if (tier == :steps) {
+            return DayEvents.buildStepsGoal(null);
+        }
+        if (tier == :floors) {
+            return DayEvents.buildFloorsGoal(null);
+        }
+        if (tier == :batt) {
+            return DayEvents.buildBatteryLow(null);
+        }
+        if (tier == :rhr) {
+            return DayEvents.buildRestingHrDemo();
         }
 
         var durationSec = 1500; // ~common, 5km @ 5:00/km
