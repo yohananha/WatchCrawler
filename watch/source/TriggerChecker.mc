@@ -35,6 +35,7 @@ class TriggerChecker {
 
         var url = Config.serverUrl();
         if (url == null) {
+            BgStatus.setTrigger("no serverUrl set");
             finish(false);
             return;
         }
@@ -44,6 +45,7 @@ class TriggerChecker {
         if (key != null) {
             headers.put("X-Watch-Key", key as String);
         }
+        BgStatus.setTrigger("sending key=" + (key == null ? "none" : "set"));
 
         var options = {
             :method => Communications.HTTP_REQUEST_METHOD_POST,
@@ -54,16 +56,17 @@ class TriggerChecker {
         try {
             Communications.makeWebRequest((url as String) + "/trigger-test/consume", {}, options, method(:onResponse));
         } catch (ex) {
-            System.println("[TRIG] makeWebRequest threw: " + ex.getErrorMessage());
+            BgStatus.setTrigger("threw: " + ex.getErrorMessage());
             finish(false);
         }
     }
 
     function onResponse(responseCode as Number, data as Null or Dictionary or String or PersistedContent.Iterator) as Void {
         if (responseCode == 200 && data instanceof Dictionary && data["wasArmed"] == true) {
-            System.println("[TRIG] remote test armed");
+            BgStatus.setTrigger("HTTP 200 wasArmed=true");
             finish(true);
         } else {
+            BgStatus.setTrigger("HTTP " + responseCode + (responseCode == 200 ? " wasArmed=false" : ""));
             finish(false);
         }
     }

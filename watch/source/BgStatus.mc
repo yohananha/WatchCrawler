@@ -26,6 +26,18 @@ class BgStatus {
         System.println("[BG] stage=" + stage + " run=" + count);
     }
 
+    // Why the last remote-trigger poll returned "not armed": no URL/key set,
+    // request threw, or the HTTP/Communications code that came back.
+    static function setTrigger(detail as String) as Void {
+        Application.Storage.setValue("bgTrigger", detail);
+        System.println("[BG] trigger: " + detail);
+    }
+
+    static function triggerSummary() as String {
+        var s = Application.Storage.getValue("bgTrigger");
+        return s == null ? "trig: -" : ("trig: " + s);
+    }
+
     static function summary() as String {
         var s = Application.Storage.getValue(KEY);
         if (s == null || !(s instanceof Dictionary)) {
