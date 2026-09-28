@@ -30,7 +30,8 @@ class Config {
     // For diagnostics: which sources have a value, without revealing it.
     static function describe() as String {
         return "props:" + (fromProperties("serverUrl") == null ? "-" : "url")
-            + " store:" + (fromStorage(STORE_URL) == null ? "-" : "url");
+            + " store:" + (fromStorage(STORE_URL) == null ? "-" : "url")
+            + " baked:" + (fromBaked(Rez.Strings.CfgServerUrl) == null ? "-" : "url");
     }
 
     private static function read(propKey as String, storeKey as String) as String? {
@@ -38,7 +39,21 @@ class Config {
         if (v != null) {
             return v;
         }
-        return fromStorage(storeKey);
+        var s = fromStorage(storeKey);
+        if (s != null) {
+            return s;
+        }
+        return fromBaked(propKey == "serverUrl" ? Rez.Strings.CfgServerUrl : Rez.Strings.CfgSharedKey);
+    }
+
+    // Compile-time value from resources/strings (bypasses persisted
+    // Properties, which can hold an empty value from an older install).
+    private static function fromBaked(id) as String? {
+        try {
+            return nonEmpty(Application.loadResource(id));
+        } catch (ex) {
+            return null;
+        }
     }
 
     private static function mirror(propKey as String, storeKey as String) as Void {

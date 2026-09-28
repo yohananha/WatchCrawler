@@ -2,4 +2,7 @@
     <string id="AppName">Achievements</string>
     <string id="SettingServerUrl">Server URL (e.g. https://your-app.fly.dev)</string>
     <string id="SettingSharedKey">Shared key</string>
+    <!-- Empty in git; tools/build_personal.sh bakes real values into a gitignored copy. -->
+    <string id="CfgServerUrl"></string>
+    <string id="CfgSharedKey"></string>
 </strings>

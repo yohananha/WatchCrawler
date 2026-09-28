@@ -49,6 +49,15 @@ text = text.replace(
 open(path, "w", encoding="utf-8").write(text)
 PYEOF
 
+python3 - "$BUILD_DIR/resources/strings/strings.xml" "$WATCHCRAWLER_SERVER_URL" "$WATCHCRAWLER_SHARED_KEY" << 'PYEOF'
+import sys
+path, url, key = sys.argv[1:4]
+t = open(path, encoding="utf-8").read()
+t = t.replace('<string id="CfgServerUrl"></string>', '<string id="CfgServerUrl">' + url + '</string>')
+t = t.replace('<string id="CfgSharedKey"></string>', '<string id="CfgSharedKey">' + key + '</string>')
+open(path, "w", encoding="utf-8").write(t)
+PYEOF
+
 mkdir -p "$BUILD_DIR/bin"
 cd "$BUILD_DIR"
 monkeyc -f monkey.jungle -d "$DEVICE" -o bin/achievements.prg -y keys/developer_key.der -w

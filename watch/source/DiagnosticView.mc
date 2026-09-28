@@ -30,7 +30,7 @@ class DiagnosticView extends WatchUi.View {
     private static var _selfTested as Boolean = false;
 
     function onLayout(dc as Dc) as Void {
-        _font = WatchUi.loadResource(Rez.Fonts.Sk18);
+        _font = Graphics.FONT_XTINY; // system font: readable for config/status text
         System.println("[DIAG] Notif:" + yn(hasSymbol(:Notifications)) + " Bg:" + yn(hasSymbol(:Background))
             + " ActMon:" + yn(hasSymbol(:ActivityMonitor)) + " Hist:" + yn(Toybox.UserProfile has :getUserActivityHistory)
             + " Comm:" + yn(hasSymbol(:Communications)) + " Tone:" + yn(Toybox.Attention has :playTone));
