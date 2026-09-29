@@ -96,13 +96,29 @@ class ProfileCapture {
         if (sub == Activity.SUB_SPORT_INDOOR_ROWING) { return "ROW"; }
         if (sub == Activity.SUB_SPORT_FLEXIBILITY_TRAINING) { return "STRCH"; }
         if (sub == Activity.SUB_SPORT_BREATHING) { return "ZEN"; }
-        return fromName(cap["name"] as String);
+        // No known sub-sport: use the profile name if it survives the pixel font's limited
+        // glyph set (a Hebrew name like "הליכה" does not), else the sport ("WALK").
+        var fromProfile = fromName(cap["name"] as String);
+        if (fromProfile != null) {
+            return fromProfile;
+        }
+        return ActivityDetector.sportInfo(sportOrNull(cap))[0];
     }
 
     // Free text for the LLM prompt: the profile name the user gave it.
     static function descFor(cap as Dictionary) as String {
         var name = cap["name"] as String;
-        return name.length() > 0 ? name + " workout" : "a workout";
+        // A readable (Latin) profile name is the best hint ("Leg Day"); otherwise, e.g. a Hebrew
+        // name the LLM prompt would get as noise, describe the sport itself ("walking").
+        if (fromName(name) != null) {
+            return name + " workout";
+        }
+        return ActivityDetector.sportInfo(sportOrNull(cap))[1];
+    }
+
+    private static function sportOrNull(cap as Dictionary) as Activity.Sport? {
+        var s = cap["sport"];
+        return (s instanceof Number && (s as Number) >= 0) ? s as Activity.Sport : null;
     }
 
     // Diagnostics line: what the last background tick captured.
@@ -117,7 +133,8 @@ class ProfileCapture {
         return "prof: " + c["name"] + " s" + c["sport"] + "/" + c["sub"] + " " + ago + "m ago";
     }
 
-    private static function fromName(name as String) as String {
+    // null when nothing in the name is usable.
+    private static function fromName(name as String) as String? {
         var allowed = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         var up = name.toUpper();
         var out = "";
@@ -127,7 +144,7 @@ class ProfileCapture {
                 out = out + ch;
             }
         }
-        return out.length() > 0 ? out : "TRAIN";
+        return out.length() > 0 ? out : null;
     }
 
     private static function list() as Array<Dictionary> {

@@ -207,7 +207,7 @@ class ActivityDetector {
     }
 
     // [hero word (<= 5 chars), description for the LLM]
-    private static function sportInfo(sport as Activity.Sport?) as [String, String] {
+    static function sportInfo(sport as Activity.Sport?) as [String, String] {
         if (sport == null) { return ["ACT", "an activity"]; }
         if (sport == Activity.SPORT_RUNNING) { return ["RUN", "running"]; }
         if (sport == Activity.SPORT_WALKING) { return ["WALK", "walking"]; }
