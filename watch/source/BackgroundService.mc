@@ -24,6 +24,13 @@ class BackgroundService extends System.ServiceDelegate {
 
     function onTemporalEvent() as Void {
         BgStatus.mark("start");
+        // Mid-workout: remember which profile is recording, then stay completely
+        // silent (no notifications, no network) until it is saved/discarded.
+        if (ProfileCapture.captureIfRecording()) {
+            BgStatus.mark("done: recording in progress (profile captured)");
+            Background.exit(false);
+            return;
+        }
         TriggerChecker.get().checkAndConsume(method(:onTriggerChecked));
     }
 

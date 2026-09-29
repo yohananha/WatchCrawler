@@ -43,7 +43,7 @@ class ActivityDetector {
         }
 
         Application.Storage.setValue("lastSeenActivityStart", newestEpoch);
-        return buildCore(newest.type, newest.distance, newest.duration);
+        return buildCore(newest.type, newest.distance, newest.duration, newestEpoch);
     }
 
     // getUserActivityHistory()/next() are documented as non-null but the SDK
@@ -71,8 +71,14 @@ class ActivityDetector {
     // vs your own history for that sport; everything else (strength, HIIT,
     // yoga, indoor...) on duration in minutes. The watch API only exposes the
     // main sport, so strength/HIIT/yoga all arrive as "TRAINING".
-    private static function buildCore(sport as Activity.Sport?, distanceM as Number?, duration as Time.Duration?) as Dictionary {
+    private static function buildCore(sport as Activity.Sport?, distanceM as Number?, duration as Time.Duration?, startEpoch as Number) as Dictionary {
         var info = sportInfo(sport);
+        // The history only knows the main sport; if a background tick saw this
+        // recording while it ran, ProfileCapture knows the exact profile.
+        var cap = ProfileCapture.findFor(startEpoch);
+        if (cap != null) {
+            info = [ProfileCapture.heroFor(cap), ProfileCapture.descFor(cap)];
+        }
         var distance = distanceM == null ? 0 : distanceM;
         var durationSec = duration == null ? 0 : duration.value();
         return buildCoreFor(info[0], info[1], distance, durationSec);

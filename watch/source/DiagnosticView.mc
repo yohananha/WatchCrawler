@@ -108,6 +108,7 @@ class DiagnosticView extends WatchUi.View {
             + " Comm:" + yn(hasSymbol(:Communications)) + " Tone:" + yn(Toybox.Attention has :playTone));
         lines.add(BgStatus.summary());
         lines.add(BgStatus.triggerSummary());
+        lines.add(ProfileCapture.summary());
         lines.add("MENU=inject SELECT=view/back");
         lines.add(Diag.status);
 

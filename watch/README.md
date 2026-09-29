@@ -18,6 +18,13 @@ Checked from a background job (requested every 5 min; Garmin schedules it loosel
 | Step goal missed | After 21:00 (cursed) |
 | Nothing achieved today | After 22:00, if no real achievement was announced that day (cursed) |
 
+**Exact workout kind:** while a recording is running, each background tick saves the recording's profile
+(name, sport, sub-sport; `source/ProfileCapture.mc`) and stays completely silent: no notifications, no
+network. When the finished activity appears in history it is matched by start time, so a strength/HIIT/yoga
+session is announced as that instead of "TRAINING". A recording shorter than the tick interval is never
+seen and gets the generic label. Whether the background process may read the profile is unverified on the
+real watch: the diagnostics screen shows a `prof:` line with what was captured (or the error).
+
 Day events (everything except activities) respect **quiet hours** (default 23:00-06:59) and a
 **daily cap** (default 10 announcements, counting activities). Those numbers, plus the idle/goal hours,
 are tuned on the *server* (`DAY_*` env vars in `../server/fly.toml`) and picked up on the watch's next
