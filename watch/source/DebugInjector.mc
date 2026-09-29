@@ -33,7 +33,7 @@ class DebugInjector {
     }
 
     function onResolved(achievement as Dictionary) as Void {
-        PendingQueue.push(achievement);
+        PendingQueue.push(achievement, true);
         var result = Notifier.notifyAchievement(achievement);
         Diag.status = (achievement["tier"] as String) + " queued: " + result;
         System.println("[DIAG] " + Diag.status);

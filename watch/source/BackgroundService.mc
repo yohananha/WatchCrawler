@@ -18,6 +18,9 @@ import Toybox.System;
 (:background)
 class BackgroundService extends System.ServiceDelegate {
 
+    // True when this run was started by the server's test trigger (short queue expiry).
+    private var _isTest as Boolean = false;
+
     function initialize() {
         ServiceDelegate.initialize();
     }
@@ -36,6 +39,7 @@ class BackgroundService extends System.ServiceDelegate {
 
     function onTriggerChecked(armed as Boolean, kind as String?) as Void {
         if (armed) {
+            _isTest = true;
             BgStatus.mark("trigger armed (" + kind + ") -> resolving");
             // See ActivityDetector.buildFakeCore: fixed values, tier forced
             // to :legendary. Its baselineMean/Std are null, so the server
@@ -70,7 +74,7 @@ class BackgroundService extends System.ServiceDelegate {
             DayEvents.noteAchievement(); // the idle roast itself doesn't count as an achievement
         }
         DayEvents.noteSent();
-        PendingQueue.push(achievement);
+        PendingQueue.push(achievement, _isTest);
         var result = Notifier.notifyAchievement(achievement);
         BgStatus.mark("done: notified (" + result + ")");
         Background.exit(true);
