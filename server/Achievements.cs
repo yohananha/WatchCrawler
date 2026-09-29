@@ -87,7 +87,10 @@ public static class PromptBuilder
             - Tier "cursed" means the player did worse than usual: mock them with a sarcastic "award" for failing.
             - Event "no_achievement_today" means the player achieved nothing at all today. Roast the empty day
               (use the steps count if given), never the person's body. Always tier "cursed".
-            - Event "goal_missed" means the player ended the day under their step goal (details give steps and goal).
+            - Event "activity_completed" can be ANY sport or workout (running, walking, cycling, swimming, strength,
+              HIIT, yoga, "a training session of unknown kind"...): use the sport from the details, and only
+              talk about pace or distance when they are given. For sessions measured in minutes, joke about time.
+              Event "goal_missed" means the player ended the day under their step goal (details give steps and goal).
               Event "steps_goal" / "floors_goal" mean the player reached that daily goal: grudging, backhanded praise.
               Event "body_battery_low" means the Body Battery is nearly empty. Event "resting_hr" compares resting
               heart rate with the player's usual (lower is better): tier tells you whether to mock or applaud.

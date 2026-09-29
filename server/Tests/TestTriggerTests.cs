@@ -73,4 +73,29 @@ public class TestTriggerTests : IDisposable
             Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(nested))!, recursive: true);
         }
     }
+
+    [Fact]
+    public void ConsumeKind_ReturnsTheArmedKind_AndClears()
+    {
+        TestTrigger.Arm("hiit");
+
+        Assert.Equal("hiit", TestTrigger.ConsumeKind());
+        Assert.Null(TestTrigger.ConsumeKind());
+    }
+
+    [Fact]
+    public void Arm_WithUnknownKind_FallsBackToDefault()
+    {
+        TestTrigger.Arm("nonsense");
+
+        Assert.Equal(TestTrigger.DefaultKind, TestTrigger.ConsumeKind());
+    }
+
+    [Fact]
+    public void ConsumeKind_OldTimestampFlagFile_IsTreatedAsDefault()
+    {
+        File.WriteAllText(_path, DateTimeOffset.UtcNow.ToString("O"));
+
+        Assert.Equal(TestTrigger.DefaultKind, TestTrigger.ConsumeKind());
+    }
 }

@@ -27,15 +27,15 @@ class BackgroundService extends System.ServiceDelegate {
         TriggerChecker.get().checkAndConsume(method(:onTriggerChecked));
     }
 
-    function onTriggerChecked(armed as Boolean) as Void {
+    function onTriggerChecked(armed as Boolean, kind as String?) as Void {
         if (armed) {
-            BgStatus.mark("trigger armed -> resolving");
+            BgStatus.mark("trigger armed (" + kind + ") -> resolving");
             // See ActivityDetector.buildFakeCore: fixed values, tier forced
             // to :legendary. Its baselineMean/Std are null, so the server
             // computes its own tier for the TEXT (probably :common) - a
             // cosmetic mismatch with our local :legendary styling/sound,
             // fine for a "does the round trip work" test.
-            var test = ActivityDetector.buildFakeCore(:legendary);
+            var test = ActivityDetector.fakeCoreForKind(kind);
             AchievementResolver.get().resolve(test, method(:onResolved));
             return;
         }

@@ -31,7 +31,7 @@ class TriggerChecker {
     function initialize() {
     }
 
-    // callback: method(armed as Boolean) as Void
+    // callback: method(armed as Boolean, kind as String?) as Void
     function checkAndConsume(callback as Method) as Void {
         _callback = callback;
 
@@ -40,14 +40,14 @@ class TriggerChecker {
         var skipUntil = Application.Storage.getValue("triggerSkipUntil");
         if (skipUntil instanceof Number && Time.now().value() < skipUntil) {
             BgStatus.setTrigger("skipped (server has test trigger off)");
-            finish(false);
+            finish(false, null);
             return;
         }
 
         var url = Config.serverUrl();
         if (url == null) {
             BgStatus.setTrigger("no serverUrl (" + Config.describe() + ")");
-            finish(false);
+            finish(false, null);
             return;
         }
 
@@ -68,7 +68,7 @@ class TriggerChecker {
             Communications.makeWebRequest((url as String) + "/trigger-test/consume", {}, options, method(:onResponse));
         } catch (ex) {
             BgStatus.setTrigger("threw: " + ex.getErrorMessage());
-            finish(false);
+            finish(false, null);
         }
     }
 
@@ -76,23 +76,24 @@ class TriggerChecker {
         if (responseCode == 200 && data instanceof Dictionary && data["enabled"] == false) {
             Application.Storage.setValue("triggerSkipUntil", Time.now().value() + 6 * 3600);
             BgStatus.setTrigger("HTTP 200 test trigger off on server");
-            finish(false);
+            finish(false, null);
             return;
         }
         if (responseCode == 200 && data instanceof Dictionary && data["wasArmed"] == true) {
-            BgStatus.setTrigger("HTTP 200 wasArmed=true");
-            finish(true);
+            var kind = data["kind"];
+            BgStatus.setTrigger("HTTP 200 wasArmed=true kind=" + kind);
+            finish(true, kind instanceof String ? kind as String : null);
         } else {
             BgStatus.setTrigger("HTTP " + responseCode + (responseCode == 200 ? " wasArmed=false" : ""));
-            finish(false);
+            finish(false, null);
         }
     }
 
-    private function finish(armed as Boolean) as Void {
+    private function finish(armed as Boolean, kind as String?) as Void {
         var cb = _callback;
         _callback = null;
         if (cb != null) {
-            cb.invoke(armed);
+            cb.invoke(armed, kind);
         }
     }
 }

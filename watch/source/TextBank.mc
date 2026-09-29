@@ -95,6 +95,22 @@ class TextBank {
         return [e[0], e[1], e[2]];
     }
 
+    // No-distance sessions (strength, HIIT, yoga, ...): $2$ = time, $4$ = sport word.
+    private static const WORKOUT = {
+        :cursed => [["Technically Showed Up", "$2$ of $4$, if you squint. The mat has seen more effort.", "One participation sigh."]],
+        :common => [["A Workout Occurred", "$2$ of $4$. The System notes it happened.", "A polite nod."]],
+        :rare => [["Actual Effort Detected", "$2$ of $4$, better than your usual. Suspicious.", "One gold star, non-transferable."]],
+        :epic => [["Suspiciously Committed", "$2$ of $4$, well beyond normal. Your usual self is worried.", "A round of imaginary applause."]],
+        :legendary => [["Beast Mode, Allegedly", "$2$ of $4$. We checked the sensors twice.", "One smug nod. Redeemable never."]],
+    };
+
+    static function pickWorkout(tier as Symbol, durationSec as Number, sport as String) as [String, String, String] {
+        var bank = WORKOUT[tier];
+        var entry = (bank == null ? WORKOUT[:common] : bank)[0];
+        var args = ["", StatLine.formatDuration(durationSec), "", sport];
+        return [Lang.format(entry[0], args), Lang.format(entry[1], args), Lang.format(entry[2], args)];
+    }
+
     // Returns [title, text, reward] for the given tier, formatted with the
     // supplied numbers/sport.
     static function pick(tier as Symbol, km as Float, durationSec as Number, paceStr as String, sport as String) as [String, String, String] {

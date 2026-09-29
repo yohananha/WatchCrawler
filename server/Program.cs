@@ -86,12 +86,15 @@ var testTriggerEnabled = string.Equals(
 // background check consumes it on its next 5-min tick and runs it through
 // the real AchievementGenerator, same as a genuine detected activity - see
 // watch/source/TriggerChecker.mc and BackgroundService.mc.
-app.MapPost("/trigger-test", (ILogger<Program> log) =>
+app.MapPost("/trigger-test", (string? kind, ILogger<Program> log) =>
 {
     if (!testTriggerEnabled) return TriggerDisabled();
-    TestTrigger.Arm();
-    log.LogInformation("Test trigger ARMED");
-    return Results.Ok(new { armed = true });
+    kind ??= TestTrigger.DefaultKind;
+    if (!TestTrigger.Kinds.ContainsKey(kind))
+        return Results.Json(new { error = $"Unknown kind '{kind}'." }, statusCode: StatusCodes.Status400BadRequest);
+    TestTrigger.Arm(kind);
+    log.LogInformation("Test trigger ARMED kind={Kind}", kind);
+    return Results.Ok(new { armed = true, kind });
 });
 
 app.MapGet("/trigger-test", () =>
@@ -104,9 +107,10 @@ app.MapPost("/trigger-test/consume", (ILogger<Program> log) =>
         log.LogInformation("Watch polled trigger: feature disabled");
         return Results.Ok(new { wasArmed = false, enabled = false });
     }
-    var wasArmed = TestTrigger.ConsumeIfArmed();
-    log.LogInformation("Watch polled trigger: wasArmed={WasArmed}", wasArmed);
-    return Results.Ok(new { wasArmed, enabled = true });
+    var kind = TestTrigger.ConsumeKind();
+    var wasArmed = kind != null;
+    log.LogInformation("Watch polled trigger: wasArmed={WasArmed} kind={Kind}", wasArmed, kind);
+    return Results.Ok(new { wasArmed, enabled = true, kind });
 });
 
 static IResult TriggerDisabled() =>
@@ -114,7 +118,8 @@ static IResult TriggerDisabled() =>
 
 // Unauthenticated on purpose (the key goes in the page's own field, sent as
 // a header via fetch() below) - this is just the HTML shell.
-app.MapGet("/", () => Results.Content("""
+var kindOptions = string.Join("", TestTrigger.Kinds.Select(k => $"<option value=\"{k.Key}\">{k.Value}</option>"));
+app.MapGet("/", () => Results.Content(("""
     <!doctype html>
     <html>
     <head><meta charset="utf-8"><title>WatchCrawler</title></head>
@@ -124,6 +129,9 @@ app.MapGet("/", () => Results.Content("""
         background check. Garmin schedules these loosely, so expect anywhere from 5 to 30 minutes.</p>
         <input type="password" id="key" placeholder="Shared key" autocomplete="off"
                style="width:100%;padding:8px;box-sizing:border-box;font-size:16px">
+        <select id="kind" style="width:100%;margin-top:10px;padding:8px;box-sizing:border-box;font-size:16px">
+            {{KIND_OPTIONS}}
+        </select>
         <button onclick="trigger()" style="margin-top:10px;padding:10px 18px;font-size:16px">
             Trigger test achievement
         </button>
@@ -134,7 +142,7 @@ app.MapGet("/", () => Results.Content("""
                 var result = document.getElementById('result');
                 result.textContent = 'Arming...';
                 try {
-                    var res = await fetch('/trigger-test', { method: 'POST', headers: { 'X-Watch-Key': key } });
+                    var res = await fetch('/trigger-test?kind=' + encodeURIComponent(document.getElementById('kind').value), { method: 'POST', headers: { 'X-Watch-Key': key } });
                     result.textContent = res.ok
                         ? 'Armed! Check your watch in 5-30 minutes.'
                         : 'Failed (' + res.status + '). Check the shared key.';
@@ -145,7 +153,7 @@ app.MapGet("/", () => Results.Content("""
         </script>
     </body>
     </html>
-    """, "text/html"));
+    """).Replace("{{KIND_OPTIONS}}", kindOptions), "text/html"));
 
 app.MapPost("/achievement", async (
     GameEvent e,

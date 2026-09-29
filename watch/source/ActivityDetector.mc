@@ -67,18 +67,38 @@ class ActivityDetector {
         }
     }
 
+    // Any activity type. Distance sports (>= 0.5 km covered) are judged on km
+    // vs your own history for that sport; everything else (strength, HIIT,
+    // yoga, indoor...) on duration in minutes. The watch API only exposes the
+    // main sport, so strength/HIIT/yoga all arrive as "TRAINING".
     private static function buildCore(sport as Activity.Sport?, distanceM as Number?, duration as Time.Duration?) as Dictionary {
-        var sportName = sportNameFor(sport);
+        var info = sportInfo(sport);
         var distance = distanceM == null ? 0 : distanceM;
         var durationSec = duration == null ? 0 : duration.value();
+        return buildCoreFor(info[0], info[1], distance, durationSec);
+    }
+
+    static function buildCoreFor(hero as String, sportDesc as String, distance as Number, durationSec as Number) as Dictionary {
         var km = distance / 1000.0;
+        var useKm = km >= 0.5;
+        var metric = useKm ? km : durationSec / 60.0;
+        var unit = useKm ? "km" : "min";
+        var key = useKm ? hero : hero + "_MIN";
 
-        var stats = Baseline.statsFor(sportName); // read BEFORE recording
-        var evalResult = Baseline.evaluateWithStats(km, stats[0], stats[1], true);
+        var stats = Baseline.statsFor(key); // read BEFORE recording
+        var evalResult = Baseline.evaluateWithStats(metric, stats[0], stats[1], true);
         var tier = evalResult[0] as Symbol;
-        Baseline.record(sportName, km);
+        Baseline.record(key, metric);
 
-        return coreDict(sportName, distance, durationSec, km, tier, stats[0], stats[1]);
+        var core = coreDict(hero, distance, durationSec, km, tier, stats[0], stats[1]);
+        core.put("value", metric);
+        core.put("unit", unit);
+        core.put("details", {
+            "sport" => sportDesc,
+            "durationMin" => (durationSec / 60).toString(),
+            "distanceKm" => km.format("%.1f"),
+        });
+        return core;
     }
 
     // Debug-only, fully offline (no Baseline history, no server round trip):
@@ -101,6 +121,10 @@ class ActivityDetector {
             };
         }
 
+        if (tier == :strength) { return fakeWorkout("LIFT", "strength training", 3300, null); }
+        if (tier == :hiit) { return fakeWorkout("HIIT", "HIIT workout", 1500, null); }
+        if (tier == :yoga) { return fakeWorkout("YOGA", "yoga", 2700, null); }
+        if (tier == :swim) { return fakeWorkout("SWIM", "swimming", 2400, 1500); }
         if (tier == :idle) {
             return DayEvents.buildIdle();
         }
@@ -133,6 +157,33 @@ class ActivityDetector {
         return coreDict("RUN", 5000, durationSec, km, tier, null, null);
     }
 
+    // Server test page ("kind" strings) -> the same fake events as the MENU injector.
+    static function fakeCoreForKind(kind as String?) as Dictionary {
+        var k = kind == null ? "legendary" : kind;
+        var tiers = {
+            "legendary" => :legendary, "epic" => :epic, "rare" => :rare, "common" => :common,
+            "cursed" => :cursed, "test" => :test, "idle" => :idle, "goal" => :goal, "sit" => :sit,
+            "steps" => :steps, "floors" => :floors, "batt" => :batt, "rhr" => :rhr,
+            "strength" => :strength, "hiit" => :hiit, "yoga" => :yoga, "swim" => :swim,
+        };
+        var tier = tiers.hasKey(k) ? tiers[k] : :legendary;
+        return buildFakeCore(tier as Symbol);
+    }
+
+    // Fake workout without going through Baseline (no history pollution).
+    private static function fakeWorkout(hero as String, desc as String, durationSec as Number, distance as Number?) as Dictionary {
+        var dist = distance == null ? 0 : distance;
+        var core = coreDict(hero, dist, durationSec, dist / 1000.0, :common, null, null);
+        core.put("value", durationSec / 60.0);
+        core.put("unit", "min");
+        core.put("details", {
+            "sport" => desc,
+            "durationMin" => (durationSec / 60).toString(),
+            "distanceKm" => (dist / 1000.0).format("%.1f"),
+        });
+        return core;
+    }
+
     private static function coreDict(sportName as String, distanceM as Number, durationSec as Number, km as Float,
                                       tier as Symbol, mean as Float?, std as Float?) as Dictionary {
         return {
@@ -149,13 +200,19 @@ class ActivityDetector {
         };
     }
 
-    private static function sportNameFor(sport as Activity.Sport?) as String {
-        if (sport == null) { return "ACTIVITY"; }
-        if (sport == Activity.SPORT_RUNNING) { return "RUN"; }
-        if (sport == Activity.SPORT_WALKING) { return "WALK"; }
-        if (sport == Activity.SPORT_CYCLING) { return "RIDE"; }
-        if (sport == Activity.SPORT_SWIMMING) { return "SWIM"; }
-        if (sport == Activity.SPORT_HIKING) { return "HIKE"; }
-        return "ACTIVITY";
+    // [hero word (<= 5 chars), description for the LLM]
+    private static function sportInfo(sport as Activity.Sport?) as [String, String] {
+        if (sport == null) { return ["ACT", "an activity"]; }
+        if (sport == Activity.SPORT_RUNNING) { return ["RUN", "running"]; }
+        if (sport == Activity.SPORT_WALKING) { return ["WALK", "walking"]; }
+        if (sport == Activity.SPORT_CYCLING) { return ["RIDE", "cycling"]; }
+        if (sport == Activity.SPORT_SWIMMING) { return ["SWIM", "swimming"]; }
+        if (sport == Activity.SPORT_HIKING) { return ["HIKE", "hiking"]; }
+        if (sport == Activity.SPORT_ROWING) { return ["ROW", "rowing"]; }
+        if (sport == Activity.SPORT_TRAINING) { return ["TRAIN", "a training session (strength, HIIT, yoga or similar; exact kind unknown)"]; }
+        if (sport == Activity.SPORT_ALPINE_SKIING) { return ["SKI", "alpine skiing"]; }
+        if (sport == Activity.SPORT_CROSS_COUNTRY_SKIING) { return ["SKI", "cross-country skiing"]; }
+        if (sport == Activity.SPORT_SNOWBOARDING) { return ["SNOW", "snowboarding"]; }
+        return ["ACT", "an activity"];
     }
 }

@@ -16,13 +16,49 @@ public static class TestTrigger
         Environment.GetEnvironmentVariable("TRIGGER_STATE_PATH")
         ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "watchcrawler-trigger.flag");
 
-    public static void Arm()
+    /// <summary>Kinds the test page can fire: id (what the watch's debug injector understands) -> label.</summary>
+    public static readonly IReadOnlyDictionary<string, string> Kinds = new Dictionary<string, string>
+    {
+        ["legendary"] = "Run: legendary (personal record)",
+        ["epic"] = "Run: epic",
+        ["rare"] = "Run: rare",
+        ["common"] = "Run: common",
+        ["cursed"] = "Run: cursed (worse than usual)",
+        ["strength"] = "Strength training",
+        ["hiit"] = "HIIT",
+        ["yoga"] = "Yoga",
+        ["swim"] = "Swim",
+        ["idle"] = "Nothing achieved today",
+        ["goal"] = "Step goal missed",
+        ["sit"] = "Sedentary (move bar maxed)",
+        ["steps"] = "Step goal reached",
+        ["floors"] = "Floors goal reached",
+        ["batt"] = "Body Battery low",
+        ["rhr"] = "Resting heart rate (better than usual)",
+        ["test"] = "Canned joke (no server text)",
+    };
+
+    public const string DefaultKind = "legendary";
+
+    public static void Arm(string kind = DefaultKind)
     {
         lock (Gate)
         {
             var dir = System.IO.Path.GetDirectoryName(Path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(Path, DateTimeOffset.UtcNow.ToString("O"));
+            File.WriteAllText(Path, Kinds.ContainsKey(kind) ? kind : DefaultKind);
+        }
+    }
+
+    /// <summary>Like <see cref="ConsumeIfArmed"/> but returns which kind was armed (null if none).</summary>
+    public static string? ConsumeKind()
+    {
+        lock (Gate)
+        {
+            if (!File.Exists(Path)) return null;
+            var kind = File.ReadAllText(Path).Trim();
+            File.Delete(Path);
+            return Kinds.ContainsKey(kind) ? kind : DefaultKind; // old flag files held a timestamp
         }
     }
 

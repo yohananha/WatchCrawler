@@ -53,8 +53,9 @@ class AchievementResolver {
 
         var body = {
             "type" => "activity_completed",
-            "value" => core["km"],
-            "unit" => "km",
+            "value" => core.hasKey("value") ? core["value"] : core["km"],
+            "unit" => core.hasKey("unit") ? core["unit"] : "km",
+            "details" => core.hasKey("details") ? core["details"] : null,
             "baselineMean" => core["baselineMean"],
             "baselineStd" => core["baselineStd"],
             "higherIsBetter" => true,
@@ -125,7 +126,8 @@ class AchievementResolver {
     private function finishWithFallback() as Void {
         var core = _core as Dictionary;
         var tier = Baseline.tierFromName(core["tier"] as String);
-        var words = core.hasKey("eventType") ? TextBank.pickEvent(core["eventType"] as String, core["tier"] as String) : TextBank.pick(tier, core["km"] as Float, core["durationSec"] as Number,
+        var noDistance = core.hasKey("unit") && (core["unit"] as String).equals("min");
+        var words = core.hasKey("eventType") ? TextBank.pickEvent(core["eventType"] as String, core["tier"] as String) : noDistance ? TextBank.pickWorkout(tier, core["durationSec"] as Number, core["hero"] as String) : TextBank.pick(tier, core["km"] as Float, core["durationSec"] as Number,
             core["pace"] as String, core["hero"] as String);
         var result = {
             "hero" => core["hero"],
