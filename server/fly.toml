@@ -21,12 +21,21 @@ primary_region = "iad"               # pick the region closest to you
   PORT = "8080"
   # Remote test trigger (arming page + watch polling). Set to "false" or
   # remove once you are done testing achievements.
-  ENABLE_TEST_TRIGGER = "true"
+  ENABLE_TEST_TRIGGER = "false"
   # The remote test trigger's armed flag is a file on this volume, not
   # process memory - Fly wipes memory on every idle stop, which silently
   # lost armed triggers. Create once: fly volumes create trigger_data
   # --region iad --size 1 --app watchcrawler
   TRIGGER_STATE_PATH = "/data/trigger.flag"
+  # "Do not repeat recent jokes" history, kept across idle stops.
+  HISTORY_STATE_PATH = "/data/history.json"
+  # Daily events (hours 0-23 in the watch's local time). The watch picks these up
+  # from its next poll, no reinstall: edit here + `fly deploy`.
+  DAY_QUIET_FROM = "23"
+  DAY_QUIET_TO = "7"
+  DAY_MAX_PER_DAY = "10"
+  DAY_IDLE_HOUR = "22"
+  DAY_GOAL_HOUR = "21"
 
 [mounts]
   source = "trigger_data"

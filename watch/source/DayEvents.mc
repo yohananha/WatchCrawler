@@ -21,17 +21,15 @@ import Toybox.UserProfile;
 //   no_achievement_today       after IDLE_HOUR, nothing announced today (cursed)
 (:background)
 class DayEvents {
-    static const IDLE_HOUR = 22;
-    static const GOAL_HOUR = 21;
+    // Tunable from the server (Fly env vars, delivered with each trigger poll and
+    // cached in Storage by TriggerChecker); these are the defaults until the first poll.
+    private static const DEFAULTS = { "idleHour" => 22, "goalHour" => 21, "quietFrom" => 23, "quietTo" => 7, "maxPerDay" => 10 };
     static const SEDENTARY_FROM_HOUR = 9;
     static const SEDENTARY_TO_HOUR = 22;
     static const BATTERY_LOW = 15;
     static const RHR_FROM_HOUR = 8;
 
-    // No day-events at night (23:00-06:59); activities you actually do are exempt.
-    static const QUIET_FROM_HOUR = 23;
-    static const QUIET_TO_HOUR = 7;
-    static const MAX_PER_DAY = 10;
+    // Quiet hours (default 23:00-06:59): no day-events; activities you actually do are exempt.
 
     private static const LAST_ACHIEVEMENT_KEY = "lastAchievementDay";
     private static const CAP_DAY_KEY = "capDay";
@@ -50,8 +48,20 @@ class DayEvents {
         Application.Storage.setValue(CAP_COUNT_KEY, (n == null ? 0 : n as Number) + 1);
     }
 
+    // One tunable value: server-provided (Storage "dayCfg") or the default.
+    private static function cfg(key as String) as Number {
+        var saved = Application.Storage.getValue("dayCfg");
+        if (saved instanceof Dictionary && saved.hasKey(key) && saved[key] instanceof Number) {
+            return saved[key] as Number;
+        }
+        return DEFAULTS[key] as Number;
+    }
+
     static function isQuiet(hour as Number) as Boolean {
-        return hour >= QUIET_FROM_HOUR || hour < QUIET_TO_HOUR;
+        var from = cfg("quietFrom");
+        var to = cfg("quietTo");
+        // from > to wraps midnight (23 -> 7); from <= to is a same-day window.
+        return from > to ? (hour >= from || hour < to) : (hour >= from && hour < to);
     }
 
     static function capReached(day as Number) as Boolean {
@@ -59,7 +69,7 @@ class DayEvents {
             return false;
         }
         var n = Application.Storage.getValue(CAP_COUNT_KEY);
-        return n != null && (n as Number) >= MAX_PER_DAY;
+        return n != null && (n as Number) >= cfg("maxPerDay");
     }
 
     // Returns a core event for the first event that qualifies right now (and
@@ -154,7 +164,7 @@ class DayEvents {
     }
 
     private static function goalMissed(hour as Number, day as Number, info as ActivityMonitor.Info?) as Dictionary? {
-        if (hour < GOAL_HOUR || !once("goal_missed", day) || info == null || info.steps == null
+        if (hour < cfg("goalHour") || !once("goal_missed", day) || info == null || info.steps == null
             || info.stepGoal == null || info.stepGoal <= 0 || info.steps >= info.stepGoal) {
             return null;
         }
@@ -162,7 +172,7 @@ class DayEvents {
     }
 
     private static function idleDay(hour as Number, day as Number) as Dictionary? {
-        if (hour < IDLE_HOUR || !once("no_achievement_today", day)
+        if (hour < cfg("idleHour") || !once("no_achievement_today", day)
             || Application.Storage.getValue(LAST_ACHIEVEMENT_KEY) == day) {
             return null;
         }

@@ -14,6 +14,8 @@
 | `Program.cs` | מצב API או מצב השוואה, אימות מפתח משותף |
 | `sample-events.json` | 10 אירועים לדוגמה – כדאי להחליף באירועים אמיתיים שלך |
 | `Tests/` | בדיקות יחידה (xUnit) ל-`TierCalculator` ו-`AchievementGenerator` |
+| `TestTrigger.cs` | דגל "טריגר בדיקה" כקובץ על ה-Volume, כולל סוג האירוע שנבחר בעמוד ה-`/` |
+| `DayEventSettings.cs` | שעות שקט / תקרה יומית / שעות אירועי סוף-יום, מה-env, נשלחים לשעון |
 | `Dockerfile`, `render.yaml` | דיפלוי ל-Render |
 | `fly.toml` | דיפלוי ל-Fly.io (חלופה – דורש כרטיס אשראי גם ל-tier החינמי) |
 
@@ -87,17 +89,39 @@ fly secrets set ANTHROPIC_API_KEY=sk-ant-... WATCH_SHARED_KEY=<מחרוזת אק
 fly deploy
 ```
 
+## משתני סביבה (Fly: `fly.toml` בסעיף `[env]`, סודות עם `fly secrets set`)
+
+| משתנה | תפקיד |
+|---|---|
+| `ANTHROPIC_API_KEY`, `WATCH_SHARED_KEY` | **סודות** – רק ב-`fly secrets` |
+| `ENABLE_TEST_TRIGGER` | `true` = עמוד הבדיקה בסלקטור סוג אירוע והשעון בודק טריגר. ברירת מחדל `false` |
+| `TRIGGER_STATE_PATH` | קובץ הדגל על ה-Volume (`/data/trigger.flag`) |
+| `HISTORY_STATE_PATH` | היסטוריית "אל תחזור על בדיחות" על ה-Volume (`/data/history.json`); בלי זה – בזיכרון בלבד |
+| `DAY_QUIET_FROM` / `DAY_QUIET_TO` | שעות שקט (ברירת מחדל 23–7) – אין אירועי יום בשעות האלה |
+| `DAY_MAX_PER_DAY` | תקרה יומית להכרזות (10) |
+| `DAY_IDLE_HOUR` / `DAY_GOAL_HOUR` | אחרי איזו שעה "לא השגת כלום היום" (22) / "פספסת את יעד הצעדים" (21) |
+
+שינוי ב-`DAY_*` נכנס לשעון בבדיקת הטריגר הבאה, בלי התקנה מחדש. ערך לא חוקי → ברירת המחדל.
+
+### נקודות קצה
+
+`POST /achievement` (הישג מ-LLM), `GET /health`, `POST/GET /trigger-test?kind=…`,
+`POST /trigger-test/consume` (השעון; מחזיר גם את `settings` של אירועי היום). כולן חוץ מ-health
+מוגנות ב-`X-Watch-Key`.
+
 ## החלטות עיצוב
 
 - **ה-tier והצליל נקבעים בקוד, לא ע"י המודל.** z-score מול הבסיס האישי: ‎≤ ‎-1 → cursed,
   ‏‎≥ 0.6 → rare, ‏‎≥ 1.3 → epic, ‏‎≥ 2 → legendary. כך האנימציה בשעון עקבית.
 - **המודל כותב רק title / text / reward.** JSON לא תקין או ארוך מדי → ניסיון נוסף; אם גם הוא ארוך – קיצוץ; אם נכשל לגמרי – בנק fallback קטן.
-- **היסטוריית 10 ההישגים האחרונים** נשלחת במצב API כדי למנוע חזרות (כרגע בזיכרון, בהמשך DB).
+- **היסטוריית 10 ההישגים האחרונים** נשלחת במצב API כדי למנוע חזרות, ונשמרת כקובץ JSON על ה-Volume
+  (`HISTORY_STATE_PATH`) כדי לשרוד עצירות idle של Fly. משתמש יחיד – קובץ מספיק, לא צריך DB.
 - **Language** ב-appsettings קובע את שפת ההודעות. שים לב: לעברית על השעון יידרש פונט מותאם ב-Connect IQ.
 
 ## מה חסר (שלבים הבאים)
 
-- שמירת היסטוריה ב-DB (כרגע בזיכרון בלבד – מתאפס בכל הפעלה מחדש).
+- חיבור ל-Strava (סוג פעילות מדויק: כוח / HIIT / יוגה) – ראו את התוכנית (שלב 5).
+- ריבוי משתמשים (מפתח לכל משתמש, DB, pairing) – במכוון מחוץ לתחום כרגע.
 - push לטלפון במקביל לתשובה לשעון.
 - בדיקת אינטגרציה מלאה מקצה לקצה (שעון אמיתי → Fly.io → LLM אמיתי) – נבדק עד כה רק
   עד גבול ה-HTTPS (ראו `watch/README.md`).

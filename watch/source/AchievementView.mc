@@ -179,6 +179,13 @@ class AchievementView extends WatchUi.View {
         var burstReach = _tier == :cursed ? 90 : 160;
         Burst.draw(dc, cx, 258, burstPalette, burstCount, burstReach, t - 1.6, 1.0);
 
+        // Tier icon (star/diamond/skull) pops in between the headline and the tier word.
+        var iconT = t - 1.4;
+        if (iconT > 0.0 && TierIcon.hasIcon(_tier)) {
+            var cell = iconT < 0.15 ? 3 : (iconT < 0.3 ? 4 : 5);
+            TierIcon.draw(dc, _tier, cx, 206, cell, Palette.tierColorPair(_tier));
+        }
+
         var tierWord = stringField("tier", "common").toUpper();
         var shimmer = _tier == :legendary ? 8.0 : 0.0;
         var tierFont = Wave.fitFont(dc, tierWord, [_fPx46, _fPx38, _fPx30], 380);

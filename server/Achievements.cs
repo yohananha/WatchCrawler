@@ -47,18 +47,60 @@ public static class TierCalculator
     };
 }
 
-public sealed class RecentHistory(LlmSettings settings)
+/// <summary>The last few announced achievements, fed back into the prompt so the LLM does not repeat
+/// itself. Persisted as JSON on the Fly Volume (<c>HISTORY_STATE_PATH</c>): Fly wipes process memory on every
+/// idle stop, which used to reset "do not repeat" many times a day. No path -> memory only (tests, local dev).</summary>
+public sealed class RecentHistory
 {
+    private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
+
+    private readonly LlmSettings _settings;
+    private readonly string? _path;
     private readonly Queue<AchievementText> _items = new();
     private readonly object _lock = new();
+
+    public RecentHistory(LlmSettings settings) : this(settings, Environment.GetEnvironmentVariable("HISTORY_STATE_PATH")) { }
+
+    public RecentHistory(LlmSettings settings, string? path)
+    {
+        _settings = settings;
+        _path = string.IsNullOrWhiteSpace(path) ? null : path;
+        Load();
+    }
 
     public void Add(AchievementText item)
     {
         lock (_lock)
         {
             _items.Enqueue(item);
-            while (_items.Count > settings.RecentHistorySize) _items.Dequeue();
+            while (_items.Count > _settings.RecentHistorySize) _items.Dequeue();
+            Save();
         }
+    }
+
+    // Persistence must never break generating an achievement, so any I/O or parse problem is swallowed.
+    private void Load()
+    {
+        if (_path is null || !File.Exists(_path)) return;
+        try
+        {
+            var saved = JsonSerializer.Deserialize<List<AchievementText>>(File.ReadAllText(_path), Json);
+            if (saved is null) return;
+            foreach (var item in saved.TakeLast(_settings.RecentHistorySize)) _items.Enqueue(item);
+        }
+        catch (Exception) { /* corrupt file: start empty */ }
+    }
+
+    private void Save()
+    {
+        if (_path is null) return;
+        try
+        {
+            var dir = System.IO.Path.GetDirectoryName(_path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(_path, JsonSerializer.Serialize(_items.ToList(), Json));
+        }
+        catch (Exception) { /* read-only volume etc.: keep going in memory */ }
     }
 
     public IReadOnlyList<AchievementText> Snapshot()

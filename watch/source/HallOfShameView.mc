@@ -61,6 +61,11 @@ class HallOfShameView extends WatchUi.View {
 
         drawShadowedLine(dc, "" + (_index + 1) + "/" + _items.size(), cx, 48, _fPx16, [0x9A9AA4, 0x000000]);
         drawShadowedLine(dc, tier.toUpper(), cx, 78, _fPx24, pair);
+        var tierSym = Baseline.tierFromName(tier);
+        if (TierIcon.hasIcon(tierSym)) {
+            var labelHalf = dc.getTextWidthInPixels(tier.toUpper(), _fPx24) / 2;
+            TierIcon.draw(dc, tierSym, cx - labelHalf - 26, 78, 3, pair);
+        }
 
         var title = item.hasKey("title") ? item["title"] as String : "";
         var fit = ChordFit.fitBlock(dc, title.toUpper(), 114, 272, [_fPx38, _fPx30, _fPx24, _fPx16], cy, SAFE_RADIUS);

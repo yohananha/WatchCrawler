@@ -79,6 +79,10 @@ app.MapGet("/health", () => Results.Ok("ok"));
 // a production deploy doesn't expose it (or get woken by the watch polling
 // for it). When off, /trigger-test* refuses and /trigger-test/consume tells
 // the watch {enabled:false} so it stops polling for a while.
+// Day-event tuning, changeable from Fly (env vars) without reinstalling the watch app: the watch reads
+// these from every trigger poll (see DayEvents.mc). Out-of-range values fall back to the defaults.
+var dayEventSettings = DayEventSettings.FromEnvironment();
+
 var testTriggerEnabled = string.Equals(
     Environment.GetEnvironmentVariable("ENABLE_TEST_TRIGGER"), "true", StringComparison.OrdinalIgnoreCase);
 
@@ -105,12 +109,12 @@ app.MapPost("/trigger-test/consume", (ILogger<Program> log) =>
     if (!testTriggerEnabled)
     {
         log.LogInformation("Watch polled trigger: feature disabled");
-        return Results.Ok(new { wasArmed = false, enabled = false });
+        return Results.Ok(new { wasArmed = false, enabled = false, settings = dayEventSettings });
     }
     var kind = TestTrigger.ConsumeKind();
     var wasArmed = kind != null;
     log.LogInformation("Watch polled trigger: wasArmed={WasArmed} kind={Kind}", wasArmed, kind);
-    return Results.Ok(new { wasArmed, enabled = true, kind });
+    return Results.Ok(new { wasArmed, enabled = true, kind, settings = dayEventSettings });
 });
 
 static IResult TriggerDisabled() =>

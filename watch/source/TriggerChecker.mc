@@ -73,6 +73,14 @@ class TriggerChecker {
     }
 
     function onResponse(responseCode as Number, data as Null or Dictionary or String or PersistedContent.Iterator) as Void {
+        // Day-event tuning rides along on every poll (see server DayEventSettings).
+        if (responseCode == 200 && data instanceof Dictionary && data["settings"] instanceof Dictionary) {
+            var s = data["settings"] as Dictionary;
+            Application.Storage.setValue("dayCfg", {
+                "idleHour" => s["idleHour"], "goalHour" => s["goalHour"],
+                "quietFrom" => s["quietFrom"], "quietTo" => s["quietTo"], "maxPerDay" => s["maxPerDay"],
+            });
+        }
         if (responseCode == 200 && data instanceof Dictionary && data["enabled"] == false) {
             Application.Storage.setValue("triggerSkipUntil", Time.now().value() + 6 * 3600);
             BgStatus.setTrigger("HTTP 200 test trigger off on server");
