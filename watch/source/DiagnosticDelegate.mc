@@ -38,6 +38,12 @@ class DiagnosticDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
+    function onPreviousPage() as Boolean {
+        DiagnosticView.page = 1 - DiagnosticView.page;
+        WatchUi.requestUpdate();
+        return true;
+    }
+
     function onTap(evt as WatchUi.ClickEvent) as Boolean {
         return injectFakeAchievement();
     }

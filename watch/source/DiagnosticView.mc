@@ -17,6 +17,8 @@ import Toybox.WatchUi;
 // notification now only ever fires from an explicit button/tap.
 class DiagnosticView extends WatchUi.View {
     private var _font;
+    // 0 = build/history/profile/BG status, 1 = capabilities/trigger/help. Flipped by UP.
+    static var page as Number = 0;
 
     function initialize() {
         View.initialize();
@@ -104,16 +106,22 @@ class DiagnosticView extends WatchUi.View {
     private function capabilityLines() as Array<String> {
         var lines = [] as Array<String>;
 
+        // The screen doesn't scroll, so the lines are split over two pages (UP flips).
+        if (page == 0) {
+            lines.add("build " + BuildInfo.STAMP);
+            lines.add(historySummary());
+            lines.add(ProfileCapture.summary());
+            lines.add(BgStatus.summary());
+            lines.add("UP=more DOWN=reset seen");
+            return lines;
+        }
+
         // One flowing line instead of three rows - wrapFlow breaks it to fit.
         lines.add("Notif:" + yn(hasSymbol(:Notifications)) + " Bg:" + yn(hasSymbol(:Background))
             + " ActMon:" + yn(hasSymbol(:ActivityMonitor)) + " Hist:" + yn(Toybox.UserProfile has :getUserActivityHistory)
             + " Comm:" + yn(hasSymbol(:Communications)) + " Tone:" + yn(Toybox.Attention has :playTone));
-        lines.add("build " + BuildInfo.STAMP);
-        lines.add(BgStatus.summary());
         lines.add(BgStatus.triggerSummary());
-        lines.add(ProfileCapture.summary());
-        lines.add(historySummary());
-        lines.add("MENU=inject DOWN=reset seen SELECT=view/back");
+        lines.add("MENU=inject SELECT=view/back UP=back");
         lines.add(Diag.status);
 
         return lines;
