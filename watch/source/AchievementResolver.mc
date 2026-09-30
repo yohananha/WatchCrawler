@@ -80,6 +80,7 @@ class AchievementResolver {
         if (key != null) {
             headers.put("X-Watch-Key", key as String);
         }
+        WatchErr.addTo(headers);
 
         var options = {
             :method => Communications.HTTP_REQUEST_METHOD_POST,
@@ -91,6 +92,7 @@ class AchievementResolver {
             Communications.makeWebRequest((url as String) + "/achievement", body, options, method(:onResponse));
         } catch (ex) {
             System.println("[SRV] makeWebRequest threw: " + ex.getErrorMessage());
+            WatchErr.record("achievement-threw", -1);
             finishWithFallback();
         }
     }
@@ -101,9 +103,12 @@ class AchievementResolver {
         }
         if (responseCode == 200 && data instanceof Dictionary && data.hasKey("title")) {
             System.println("[SRV] got achievement from server");
+            WatchErr.clear();
+            SystemNotice.store(data as Dictionary);
             finishWithServerText(data as Dictionary);
         } else {
             System.println("[SRV] request failed, code=" + responseCode);
+            WatchErr.record("achievement", responseCode);
             finishWithFallback();
         }
     }

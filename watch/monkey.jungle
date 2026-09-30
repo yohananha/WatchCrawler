@@ -7,3 +7,9 @@ project.manifest = manifest.xml
 # gets picked up too, duplicating every class definition.
 base.sourcePath = source
 base.resourcePath = resources
+
+# This file alone is the USER build: code marked (:dev) - diagnostics screen,
+# fake-achievement injector, remote test trigger - is left out, and so are
+# the settings entries (resources-dev/). Developer builds add dev.jungle:
+#   monkeyc -f "monkey.jungle;dev.jungle" ...   (build_personal.sh --dev)
+base.excludeAnnotations = dev

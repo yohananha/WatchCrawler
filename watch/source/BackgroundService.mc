@@ -60,6 +60,13 @@ class BackgroundService extends System.ServiceDelegate {
                 AchievementResolver.get().resolve(core, method(:onResolved));
                 return;
             }
+            // Nothing happened: a good moment for a pending "top up your API credit" message.
+            var notice = SystemNotice.takeDue();
+            if (notice != null) {
+                BgStatus.mark("credit notice -> notifying");
+                onResolved(notice as Dictionary);
+                return;
+            }
             BgStatus.mark("done: no new activity");
             Background.exit(false);
             return;

@@ -1,19 +1,27 @@
-# Render Blueprint. In the Render dashboard: New > Blueprint > connect this
-# repo (yohananha/WatchCrawler) > it auto-detects this file. Set
-# ANTHROPIC_API_KEY and WATCH_SHARED_KEY as secrets after the first deploy
-# (Render dashboard > this service > Environment) - not committed here.
-# See server/README.md for the full walkthrough.
+# Render Blueprint (alternative to Fly.io). In the Render dashboard:
+# New > Blueprint > connect your fork of this repo > it detects this file and
+# asks for the secret values below. setup.sh prints exactly what to paste.
+# Note: the free plan has no disk, so usage/credit tracking resets on every
+# restart - Fly.io (setup's default) keeps it on a volume.
 services:
   - type: web
     name: watchcrawler
     runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    dockerfilePath: ./server/Dockerfile   # paths are relative to the repo root
+    dockerContext: ./server
     plan: free
     region: oregon          # pick the region closest to you
     healthCheckPath: /health
     envVars:
+      - key: LLM_PROVIDER    # anthropic or deepseek
+        sync: false
       - key: ANTHROPIC_API_KEY
-        sync: false          # set manually in the dashboard - never committed
+        sync: false          # set in the dashboard - never committed
+      - key: DEEPSEEK_API_KEY
+        sync: false
       - key: WATCH_SHARED_KEY
+        sync: false
+      - key: CREDIT_BALANCE_USD
+        sync: false
+      - key: REPORT_ERRORS   # "false" to stop sending error reports to the developer
         sync: false

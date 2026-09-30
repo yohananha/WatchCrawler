@@ -1,0 +1,7 @@
+# Developer / inner-test builds, layered on top of monkey.jungle:
+#   monkeyc -f "monkey.jungle;dev.jungle" ...   (or: tools/build_personal.sh --dev <device>)
+# Keeps the (:dev) code (diagnostics screen via MENU, fake-achievement
+# injector, remote test trigger polling) and the settings entries, and drops
+# the (:user) stand-ins used by the user build instead.
+base.excludeAnnotations = user
+base.resourcePath = resources;resources-dev

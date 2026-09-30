@@ -1,0 +1,6 @@
+# Shell scripts must keep LF endings even on Windows checkouts, or Git Bash fails on "\r".
+*.sh   text eol=lf
+# Windows batch files need CRLF.
+*.cmd  text eol=crlf
+*.png  binary
+*.der  binary

@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -36,14 +37,41 @@ jobs:
           name: server-test-results
           path: server/Tests/TestResults/*.trx
 
-  server-build:
-    name: Server Docker build
+  # Builds the server image on every push/PR; on main (and v* tags) also publishes it to
+  # ghcr.io/<owner>/watchcrawler-server, which is what setup.sh deploys - users never build .NET.
+  # One-time: after the first publish, make the package public (GitHub > Packages > watchcrawler-server
+  # > Package settings > Change visibility), or users' Fly deploys can't pull it.
+  server-image:
+    name: Server Docker image
     runs-on: ubuntu-latest
+    needs: server-tests
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t garmin-achievements-server ./server
+      - name: Image name
+        id: img
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/watchcrawler-server" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: >
+          docker build ./server
+          --build-arg BUILD_STAMP=${GITHUB_SHA::7}
+          -t ${{ steps.img.outputs.name }}:latest
+          -t ${{ steps.img.outputs.name }}:${GITHUB_SHA::7}
+
+      - name: Publish
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push ${{ steps.img.outputs.name }}:latest
+          docker push ${{ steps.img.outputs.name }}:${GITHUB_SHA::7}
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            docker tag ${{ steps.img.outputs.name }}:latest ${{ steps.img.outputs.name }}:${GITHUB_REF_NAME}
+            docker push ${{ steps.img.outputs.name }}:${GITHUB_REF_NAME}
+          fi
 
   # The Connect IQ SDK requires an interactive EULA click-through via
   # Garmin's SDK Manager (no scriptable, licensable download URL), so the

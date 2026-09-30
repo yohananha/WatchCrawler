@@ -12,6 +12,36 @@ public interface ILlmProvider
     Task<LlmResult> CompleteAsync(string system, string user, double temperature, CancellationToken ct);
 }
 
+/// <summary>A non-2xx answer from the LLM API, kept structured so callers can tell "out of credit" from a bug.</summary>
+public sealed class LlmHttpException(string provider, int status, string body)
+    : HttpRequestException($"{provider}: HTTP {status} {body}")
+{
+    public int Status => status;
+    public string Body => body;
+
+    // Anthropic: 400 invalid_request_error "Your credit balance is too low...".
+    // DeepSeek: 402 "Insufficient Balance".
+    public bool IsOutOfCredit =>
+        status == 402 ||
+        (status == 400 && (body.Contains("credit balance", StringComparison.OrdinalIgnoreCase)
+                           || body.Contains("insufficient balance", StringComparison.OrdinalIgnoreCase)));
+
+    public bool IsBadKey => status is 401 or 403;
+}
+
+public static class LlmErrors
+{
+    public static LlmErrorKind Classify(Exception ex) => ex switch
+    {
+        LlmHttpException { IsOutOfCredit: true } => LlmErrorKind.OutOfCredit,
+        LlmHttpException { IsBadKey: true } => LlmErrorKind.BadKey,
+        LlmHttpException { Status: 429 } => LlmErrorKind.RateLimited,
+        LlmHttpException => LlmErrorKind.Http,
+        TaskCanceledException or TimeoutException => LlmErrorKind.Timeout,
+        _ => LlmErrorKind.Other
+    };
+}
+
 internal static class ApiKeys
 {
     public static string Get(string envVar) =>
@@ -50,7 +80,7 @@ public sealed class AnthropicProvider(string name, ProviderSettings settings, Ht
         sw.Stop();
 
         if (!res.IsSuccessStatusCode)
-            throw new HttpRequestException($"{name}: HTTP {(int)res.StatusCode} {json}");
+            throw new LlmHttpException(name, (int)res.StatusCode, json);
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -104,7 +134,7 @@ public sealed class OpenAiCompatibleProvider(string name, ProviderSettings setti
         sw.Stop();
 
         if (!res.IsSuccessStatusCode)
-            throw new HttpRequestException($"{name}: HTTP {(int)res.StatusCode} {json}");
+            throw new LlmHttpException(name, (int)res.StatusCode, json);
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;

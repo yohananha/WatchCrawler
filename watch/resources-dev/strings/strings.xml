@@ -1,0 +1,5 @@
+<strings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
+    <!-- Developer builds only (dev.jungle): titles for the settings in ../settings/settings.xml. -->
+    <string id="SettingServerUrl">Server URL (paste the one WatchCrawler setup printed)</string>
+    <string id="SettingSharedKey">Shared key (from WatchCrawler setup)</string>
+</strings>

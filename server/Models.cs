@@ -34,7 +34,14 @@ public sealed record Achievement(
     bool IsFailure,
     string Provider,
     string Model,
-    bool IsFallback);
+    bool IsFallback)
+{
+    /// <summary>Low/out-of-credit warning for the watch to show once a day (null when credit is fine).</summary>
+    public CreditNotice? Notice { get; init; }
+}
+
+/// <summary>A "System" message about the API credit, shaped like an achievement so the watch can reuse its view.</summary>
+public sealed record CreditNotice(string State, string Title, string Text, string Reward);
 
 public sealed record LlmResult(string Content, int InputTokens, int OutputTokens, TimeSpan Latency);
 
@@ -44,7 +51,12 @@ public sealed record GenerationResult(
     int OutputTokens,
     TimeSpan Latency,
     int Attempts,
-    string? Error);
+    string? Error)
+{
+    public LlmErrorKind ErrorKind { get; init; } = LlmErrorKind.None;
+}
+
+public enum LlmErrorKind { None, OutOfCredit, BadKey, RateLimited, Http, Timeout, BadOutput, Other }
 
 public sealed class LlmSettings
 {
@@ -71,7 +83,22 @@ public sealed class ProviderSettings
     /// <summary>OpenAI-compatible reasoning models only: sends thinking={type:disabled} so the token budget goes to the answer.</summary>
     public bool DisableThinking { get; set; }
 
-    /// <summary>USD per 1M tokens, used only for the cost estimate in compare mode.</summary>
+    /// <summary>USD per 1M tokens: compare-mode estimates, spend tracking (UsageTracker) and the setup script's monthly estimate.</summary>
     public double InputPricePerM { get; set; }
     public double OutputPricePerM { get; set; }
+
+    /// <summary>Typical tokens per achievement, for the monthly estimate before any real usage exists.</summary>
+    public int AvgInputTokens { get; set; } = 1200;
+    public int AvgOutputTokens { get; set; } = 80;
+
+    public double CostUsd(int inputTokens, int outputTokens) =>
+        inputTokens * InputPricePerM / 1_000_000 + outputTokens * OutputPricePerM / 1_000_000;
+}
+
+public sealed class ReportingSettings
+{
+    /// <summary>ntfy topic URL the developer subscribes to. Empty -> no reports.</summary>
+    public string NtfyUrl { get; set; } = "";
+    /// <summary>The daily digest is also forwarded to this address by ntfy (its Email header). Empty -> push only.</summary>
+    public string DigestEmail { get; set; } = "";
 }

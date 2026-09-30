@@ -20,6 +20,7 @@ watch/gen/
 watch/.personal-build/
 
 # Developer signing key (never commit)
+watch/keys/
 *.der
 *.p12
 *.pem
@@ -27,3 +28,6 @@ watch/.personal-build/
 # Secrets
 .env
 *.env.local
+
+# Local Docker server state (docker-compose.yml mounts ./data)
+/data/

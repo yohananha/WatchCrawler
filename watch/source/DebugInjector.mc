@@ -14,6 +14,7 @@ import Toybox.WatchUi;
 //
 // A singleton instance, not static functions, for the same reason as
 // AchievementResolver: its callback needs a `self` to bind to.
+(:dev)
 class DebugInjector {
     private static var _instance as DebugInjector?;
 

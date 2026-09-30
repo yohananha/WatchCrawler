@@ -3,7 +3,7 @@
         entry="AchievementApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="5.0.0">
 
         <iq:products>
-            <!-- Primary dev target: the user's own watch. -->
+            <!-- Supported watches. setup.sh lists these ids when it asks which watch to build for. -->
             <iq:product id="fenix847mm" />
             <iq:product id="fenix7" />
             <iq:product id="fenix7pro" />

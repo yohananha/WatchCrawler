@@ -13,6 +13,7 @@ import Toybox.WatchUi;
 // No auto-firing timer here on purpose: an earlier version of this file
 // auto-fired a test notification on every view-show, which looped forever
 // on a real watch once the notification tap kept reopening the app.
+(:dev)
 class DiagnosticDelegate extends WatchUi.BehaviorDelegate {
 
     private static var _tierIndex as Number = 0;

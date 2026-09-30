@@ -81,7 +81,32 @@ class HallOfShameView extends WatchUi.View {
         dc.setColor(0xECECF2, Graphics.COLOR_TRANSPARENT);
         dc.drawText(cx, 286, statFont, stat, Graphics.TEXT_JUSTIFY_CENTER);
 
-        drawHints(dc, cx, cy, ["SELECT replay", "MENU diagnostics"], 0xB4B4BE);
+        var hints = ["SELECT replay"] as Array<String>;
+        hints.addAll(extraHints());
+        drawHints(dc, cx, cy, hints, 0xB4B4BE);
+    }
+
+    // Bottom hint lines: setup problems first, then (dev builds) the diagnostics shortcut.
+    private function extraHints() as Array<String> {
+        var hints = [] as Array<String>;
+        if (Config.serverUrl() == null) {
+            hints.add("NOT SET UP: RUN SETUP");
+        }
+        var menu = menuHint();
+        if (menu != null) {
+            hints.add(menu as String);
+        }
+        return hints;
+    }
+
+    (:dev)
+    private function menuHint() as String? {
+        return "MENU diagnostics";
+    }
+
+    (:user)
+    private function menuHint() as String? {
+        return null;
     }
 
     function onHide() as Void {
@@ -113,7 +138,7 @@ class HallOfShameView extends WatchUi.View {
             var l = lines[i];
             drawShadowedLine(dc, l["text"] as String, cx, l["top"] as Number, font, grey);
         }
-        drawHints(dc, cx, cy, ["MENU diagnostics"], 0xB4B4BE);
+        drawHints(dc, cx, cy, extraHints(), 0xB4B4BE);
     }
 
     private function drawHints(dc as Dc, cx as Number, cy as Number, hints as Array<String>, color as Number) as Void {

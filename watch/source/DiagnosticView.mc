@@ -15,6 +15,7 @@ import Toybox.WatchUi;
 // notification automatically on every view-show, which looped forever on a
 // real watch once tapping the notification kept reopening the app. Every
 // notification now only ever fires from an explicit button/tap.
+(:dev)
 class DiagnosticView extends WatchUi.View {
     private var _font;
     // 0 = build/history/profile/BG status, 1 = capabilities/trigger/help. Flipped by UP.

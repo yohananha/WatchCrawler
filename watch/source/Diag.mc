@@ -4,6 +4,7 @@ import Toybox.Lang;
 // (and, via System.println, in the monkeydo log) what input actually reached
 // the app and what Notifier did with it, since a silently-failed API call
 // looks identical to a button that isn't wired up at all.
+(:dev)
 class Diag {
     static var status as String = "(no input yet)";
 }

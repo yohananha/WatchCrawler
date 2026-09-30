@@ -18,11 +18,37 @@ if (!compareMode && !string.IsNullOrEmpty(portEnv))
     builder.WebHost.UseUrls($"http://0.0.0.0:{portEnv}");
 
 var settings = builder.Configuration.GetSection("Llm").Get<LlmSettings>() ?? new LlmSettings();
+var reporting = builder.Configuration.GetSection("Reporting").Get<ReportingSettings>() ?? new ReportingSettings();
+
+if (!compareMode)
+{
+    List<string> configErrors;
+    try
+    {
+        StartupConfig.ApplyProvider(settings, Environment.GetEnvironmentVariable);
+        configErrors = StartupConfig.Validate(settings, Environment.GetEnvironmentVariable);
+    }
+    catch (InvalidOperationException ex)
+    {
+        configErrors = [ex.Message];
+    }
+    if (configErrors.Count > 0)
+    {
+        foreach (var err in configErrors) Console.Error.WriteLine($"CONFIG ERROR: {err}");
+        await ErrorReporter.ReportStartupFailureAsync(reporting, string.Join("\n", configErrors));
+        Environment.Exit(1);
+    }
+}
+
 builder.Services.AddSingleton(settings);
+builder.Services.AddSingleton(reporting);
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<ProviderFactory>();
 builder.Services.AddSingleton<RecentHistory>();
 builder.Services.AddSingleton<AchievementGenerator>();
+builder.Services.AddSingleton<InstallInfo>();
+builder.Services.AddSingleton<ErrorReporter>();
+builder.Services.AddSingleton<UsageTracker>();
 
 var app = builder.Build();
 
@@ -48,16 +74,43 @@ app.Use(async (context, next) =>
         context.Request.Headers.UserAgent.ToString());
 });
 
+var reporter = app.Services.GetRequiredService<ErrorReporter>();
+var install = app.Services.GetRequiredService<InstallInfo>();
+var usage = app.Services.GetRequiredService<UsageTracker>();
+if (install.IsNew)
+    reporter.Report("new install", $"A new WatchCrawler server started ({settings.ActiveProvider}).", priority: 2, tags: "tada");
+
+// Unhandled exceptions: report, then answer JSON (the watch can't parse an HTML error page).
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex) when (!context.RequestAborted.IsCancellationRequested)
+    {
+        requestLog.LogError(ex, "Unhandled error on {Path}", context.Request.Path);
+        reporter.Report($"crash {ex.GetType().Name}", $"{context.Request.Path}: {ex.Message}", priority: 4, tags: "rotating_light");
+        if (!context.Response.HasStarted)
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsJsonAsync(new { error = "Server error." });
+        }
+    }
+});
+
 // Shared-key auth: the watch sends X-Watch-Key, checked against the
-// WATCH_SHARED_KEY env var. Unset -> auth is off (local dev convenience;
-// always set it in production so randoms can't burn your Anthropic quota).
+// WATCH_SHARED_KEY env var. Startup refuses to run without one unless
+// ALLOW_NO_WATCH_KEY=true (local testing), so randoms can't burn the API credit.
 var watchKey = Environment.GetEnvironmentVariable("WATCH_SHARED_KEY");
 if (!string.IsNullOrEmpty(watchKey))
 {
     app.Use(async (context, next) =>
     {
         var isProtected = context.Request.Path.StartsWithSegments("/achievement")
-            || context.Request.Path.StartsWithSegments("/trigger-test");
+            || context.Request.Path.StartsWithSegments("/trigger-test")
+            || context.Request.Path.StartsWithSegments("/day-settings")
+            || context.Request.Path.StartsWithSegments("/usage");
         if (isProtected && context.Request.Headers["X-Watch-Key"] != watchKey)
         {
             // JSON, not plain text: the watch requests
@@ -73,15 +126,40 @@ if (!string.IsNullOrEmpty(watchKey))
     });
 }
 
+// The watch reports its own last failure (network code, background error) in X-Watch-Error on its next
+// successful request - it has no other way to tell anyone. Only after auth, so strangers can't spam reports.
+app.Use(async (context, next) =>
+{
+    var watchError = context.Request.Headers["X-Watch-Error"].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(watchError))
+    {
+        var code = watchError.Split(' ', 2)[0];
+        reporter.Report($"watch {code}", watchError, priority: 3, tags: "watch");
+    }
+    await next();
+});
+
+// Day-event tuning, changeable from Fly (env vars) without reinstalling the watch app: the watch reads
+// these from every settings/trigger poll (see DayEvents.mc). Out-of-range values fall back to the defaults.
+var dayEventSettings = DayEventSettings.FromEnvironment();
+
 app.MapGet("/health", () => Results.Ok("ok"));
+
+// Spend so far and credit left, for `setup --usage` / --topup and curious users.
+app.MapGet("/usage", () => Results.Ok(usage.Snapshot()));
+
+// Release watch builds poll this (a few times a day) for day-event tuning and credit warnings;
+// dev builds get the same from /trigger-test/consume.
+app.MapGet("/day-settings", async (IHttpClientFactory http) =>
+{
+    await RefreshCreditAsync(http);
+    return Results.Ok(new { settings = dayEventSettings, notice = usage.Notice() });
+});
 
 // ENABLE_TEST_TRIGGER=true turns the remote test trigger on. Off by default so
 // a production deploy doesn't expose it (or get woken by the watch polling
 // for it). When off, /trigger-test* refuses and /trigger-test/consume tells
 // the watch {enabled:false} so it stops polling for a while.
-// Day-event tuning, changeable from Fly (env vars) without reinstalling the watch app: the watch reads
-// these from every trigger poll (see DayEvents.mc). Out-of-range values fall back to the defaults.
-var dayEventSettings = DayEventSettings.FromEnvironment();
 
 var testTriggerEnabled = string.Equals(
     Environment.GetEnvironmentVariable("ENABLE_TEST_TRIGGER"), "true", StringComparison.OrdinalIgnoreCase);
@@ -104,17 +182,19 @@ app.MapPost("/trigger-test", (string? kind, ILogger<Program> log) =>
 app.MapGet("/trigger-test", () =>
     testTriggerEnabled ? Results.Ok(new { armed = TestTrigger.IsArmed() }) : TriggerDisabled());
 
-app.MapPost("/trigger-test/consume", (ILogger<Program> log) =>
+app.MapPost("/trigger-test/consume", async (ILogger<Program> log, IHttpClientFactory http) =>
 {
+    await RefreshCreditAsync(http);
+    var notice = usage.Notice();
     if (!testTriggerEnabled)
     {
         log.LogInformation("Watch polled trigger: feature disabled");
-        return Results.Ok(new { wasArmed = false, enabled = false, settings = dayEventSettings });
+        return Results.Ok(new { wasArmed = false, enabled = false, settings = dayEventSettings, notice });
     }
     var kind = TestTrigger.ConsumeKind();
     var wasArmed = kind != null;
     log.LogInformation("Watch polled trigger: wasArmed={WasArmed} kind={Kind}", wasArmed, kind);
-    return Results.Ok(new { wasArmed, enabled = true, kind, settings = dayEventSettings });
+    return Results.Ok(new { wasArmed, enabled = true, kind, settings = dayEventSettings, notice });
 });
 
 static IResult TriggerDisabled() =>
@@ -164,6 +244,7 @@ app.MapPost("/achievement", async (
     AchievementGenerator generator,
     ProviderFactory factory,
     LlmSettings s,
+    IHttpClientFactory http,
     ILogger<Program> log,
     CancellationToken ct) =>
 {
@@ -179,7 +260,73 @@ app.MapPost("/achievement", async (
     if (result.Error is not null)
         log.LogWarning("Generation issue ({Provider}): {Error}", provider.Name, result.Error);
 
-    return Results.Ok(result.Achievement);
+    usage.Record(result.InputTokens, result.OutputTokens);
+    switch (result.ErrorKind)
+    {
+        case LlmErrorKind.OutOfCredit:
+            usage.MarkOutOfCredit();
+            break;
+        case LlmErrorKind.BadKey:
+            reporter.Report("bad API key", $"{provider.Name} rejected the API key: {result.Error}", priority: 4, tags: "key");
+            break;
+        case LlmErrorKind.None:
+            usage.MarkCallSucceeded();
+            break;
+        default:
+            // Only worth a report when the watch got the canned fallback, not a trimmed/retried success.
+            if (a.IsFallback)
+                reporter.Report($"llm {result.ErrorKind}", $"{provider.Name}/{provider.Model}: {result.Error}");
+            break;
+    }
+    await RefreshCreditAsync(http);
+
+    return Results.Ok(result.Achievement with { Notice = usage.Notice() });
 });
 
 app.Run();
+
+// DeepSeek balance (at most every 12h; Anthropic keys can't read theirs), then tell the owner and the
+// user's own ntfy topic (USER_NTFY_URL, optional) once whenever the credit state changes.
+async Task RefreshCreditAsync(IHttpClientFactory http)
+{
+    try
+    {
+        if (settings.Providers.TryGetValue(settings.ActiveProvider, out var p)
+            && p.BaseUrl.Contains("deepseek", StringComparison.OrdinalIgnoreCase)
+            && usage.ProviderBalanceStale)
+        {
+            var client = http.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(8);
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"{p.BaseUrl.TrimEnd('/')}/user/balance");
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",
+                Environment.GetEnvironmentVariable(p.ApiKeyEnv));
+            using var res = await client.SendAsync(req);
+            if (res.IsSuccessStatusCode && UsageTracker.ParseDeepSeekBalance(await res.Content.ReadAsStringAsync()) is { } bal)
+                usage.SetProviderBalance(bal.Usd, bal.IsAvailable);
+        }
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning("Balance check failed: {Error}", ex.Message);
+    }
+
+    if (usage.TakeStateChange() is { } state)
+    {
+        var snap = usage.Snapshot();
+        var text = $"API credit is now '{state}' (remaining ~${snap.RemainingUsd?.ToString("0.00") ?? "?"}, " +
+                   $"~{snap.DaysLeft?.ToString("0") ?? "?"} days, ~${snap.ProjectedMonthUsd:0.00}/month).";
+        if (state != "ok") reporter.Report($"credit {state}", text, priority: 3, tags: "moneybag");
+        if (Environment.GetEnvironmentVariable("USER_NTFY_URL") is { Length: > 0 } userNtfy)
+        {
+            try
+            {
+                using var userReq = new HttpRequestMessage(HttpMethod.Post, userNtfy) { Content = new StringContent(text) };
+                userReq.Headers.Add("Title", state == "ok" ? "WatchCrawler: credit OK again" : "WatchCrawler: top up your API credit");
+                userReq.Headers.Add("Tags", "moneybag");
+                await http.CreateClient().SendAsync(userReq);
+            }
+            catch (Exception) { /* best effort */ }
+        }
+    }
+    await reporter.MaybeSendDigestAsync();
+}

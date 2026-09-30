@@ -1,4 +1,4 @@
-# Achievements watch app (Connect IQ)
+# WatchCrawler watch app (Connect IQ)
 
 Detects events in the background, asks the server (`../server/`) for a sarcastic achievement, and
 shows a system notification (pops up on the watch) that opens a pixel-art animation with
@@ -33,25 +33,38 @@ doesn't reliably expose sleep data.
 
 ## Building
 
-Needs the Connect IQ SDK + a JDK on `PATH`, and a developer key at `keys/developer_key.der`
+Users never do this by hand: `../setup.sh` calls `tools/build_personal.sh`, which finds the SDK,
+creates a signing key if there isn't one, and bakes in the server URL and key.
+
+By hand, you need the Connect IQ SDK plus a JDK, and a developer key at `keys/developer_key.der`
 (`openssl genrsa -out keys/developer_key.pem 4096 && openssl pkcs8 -topk8 -inform PEM -outform DER
--in keys/developer_key.pem -out keys/developer_key.der -nocrypt` — gitignored, generate your own).
+-in keys/developer_key.pem -out keys/developer_key.der -nocrypt`; gitignored, generate your own).
+
+There are two build flavours:
+
+| Build | Jungle | What's in it |
+|---|---|---|
+| **User** (default, what setup makes) | `monkey.jungle` | Everything except `(:dev)` code. MENU does nothing, there's no settings entry, no test-trigger polling. Server settings and credit notices are polled every 3 h via `GET /day-settings`. |
+| **Developer** | `"monkey.jungle;dev.jungle"` | Adds the diagnostics screen (MENU), the fake-achievement injector, remote test-trigger polling every cycle, and the settings entries in `resources-dev/`. Drops the `(:user)` stand-ins. |
 
 ```bash
-monkeyc -f monkey.jungle -d fenix847mm -o bin/achievements.prg -y keys/developer_key.der -w
+monkeyc -f monkey.jungle -d <device> -o bin/WatchCrawler.prg -y keys/developer_key.der -w
+monkeyc -f "monkey.jungle;dev.jungle" -d <device> -o bin/WatchCrawler.prg -y keys/developer_key.der -w
 ```
 
-Swap `fenix847mm` for your device id (`ls "$APPDATA/Garmin/ConnectIQ/Devices"` on Windows).
+To keep something out of user builds, annotate it `(:dev)`. If callers need a replacement, give
+the user build a same-named `(:user)` version (see `HallOfShameDelegate.onMenu`,
+`TriggerChecker.endpoint`). Device ids: `ls "$APPDATA/Garmin/ConnectIQ/Devices"` on Windows.
 
 ## Running in the simulator
 
 ```bash
 simulator.exe &            # from the SDK's bin/ directory
-monkeydo bin/achievements.prg fenix847mm
+monkeydo bin/WatchCrawler.prg <device>
 ```
 
 The default home screen is the **Hall of Shame** (your achievement history — empty on first run).
-**MENU** from there opens a diagnostic screen (capability probes); **MENU**/tap on *that* screen
+In a **developer build**, **MENU** from there opens a diagnostic screen (capability probes); **MENU**/tap on *that* screen
 cycles through fake achievements per tier via `DebugInjector` (including a `Token Wasted
 Successfully` sanity check that skips the server entirely), **SELECT** goes back.
 
@@ -67,24 +80,37 @@ a sideloaded watch:
 
 - **Simulator:** its own Settings editor works for local dev/testing (note it keeps old saved
   values across runs).
-- **Real watch:** use `tools/build_personal.sh` — bakes your real values into a gitignored copy of
-  the project without ever touching the tracked `resources/strings/strings.xml` or `properties.xml`
-  (which stay empty/safe):
+- **Real watch:** use `tools/build_personal.sh` (or `../setup.sh --build-only`, which remembers
+  the values). It bakes your real values into a gitignored copy of the project without touching the
+  tracked `resources/strings/strings.xml` or `properties.xml`, which stay empty and safe:
   ```bash
-  export WATCHCRAWLER_SERVER_URL=https://watchcrawler.fly.dev
+  export WATCHCRAWLER_SERVER_URL=https://your-watchcrawler.fly.dev
   export WATCHCRAWLER_SHARED_KEY=<your WATCH_SHARED_KEY>
-  tools/build_personal.sh fenix847mm
-  # copy .personal-build/bin/achievements.prg to GARMIN/Apps/achievements.prg
+  tools/build_personal.sh <device>          # user build
+  tools/build_personal.sh --dev <device>    # developer build
+  # copy .personal-build/bin/WatchCrawler.prg to GARMIN/Apps/
   ```
 
-Empty `serverUrl` = fully offline (local `TextBank` only, no network call at all).
+Empty `serverUrl` means fully offline: local `TextBank` only, no network calls, and the Hall of
+Shame shows "NOT SET UP: RUN SETUP".
+
+## Credit notices and error reports
+
+- **Credit notices:** every server answer carries `notice`, a "Mana Reserves Low" / "Out of Mana"
+  message when the user's API credit is low or empty. `SystemNotice.mc` keeps the latest one. The
+  background service shows it as a "SYSTEM MESSAGE" at most once a day, outside quiet hours, on a
+  tick with nothing else to announce.
+- **Error reports:** `WatchErr.mc` remembers the last failed request (response code, where, how
+  many times, build stamp). It sends that as `X-Watch-Error` on the next request that gets through,
+  and the server forwards it to the developer's reports. Phone-not-connected codes (-104, -2) are
+  ignored.
 
 **Note:** Connect IQ refuses plain HTTP (`SECURE_CONNECTION_REQUIRED`, response code -1001) — the
 server URL must be HTTPS. Fly.io (see `../server/fly.toml`) provides this automatically.
 
 ## Remote test trigger
 
-No physical button needed: visit the server's `/` page (e.g. `https://watchcrawler.fly.dev/`),
+**Developer builds only.** No physical button needed: visit the server's `/` page (e.g. `https://your-watchcrawler.fly.dev/`),
 enter the shared key, **pick the event kind** (run tiers, strength, HIIT, yoga, swim, nothing today,
 goal missed, sedentary, goals reached, Body Battery, resting HR, canned joke) and click
 **Trigger test achievement**. The watch's background poll picks it up (5-30 min) and runs a real
@@ -96,12 +122,12 @@ watch stops polling for it for 6 hours (so it doesn't wake the server) and re-ch
 open the app. To use it: set `ENABLE_TEST_TRIGGER = "true"`, `fly deploy`, open the app once on the
 watch.
 
-On the watch, MENU (from the Hall of Shame) opens diagnostics: it shows the last background run
+On the watch (developer build), MENU (from the Hall of Shame) opens diagnostics: it shows the last background run
 (`BG#n ... stage`) and the last trigger poll (`trig: ...`); MENU/tap there cycles through fake events.
 
 ## Screens and art
 
-- **Hall of Shame** (home): your history, newest first, with the tier icon; SELECT replays, MENU = diagnostics.
+- **Hall of Shame** (home): your history, newest first, with the tier icon; SELECT replays, MENU = diagnostics (dev builds).
 - **Achievement popup:** three scenes (unlock with a star/diamond/skull tier icon, record, reward).
   Tier icons are 9x9 pixel grids in `source/anim/TierIcon.mc`.
 - **Launcher icon:** `resources/drawables/launcher_icon.png` (65x65 for the fenix 8 47mm; the
@@ -109,14 +135,19 @@ On the watch, MENU (from the Hall of Shame) opens diagnostics: it shows the last
 
 ## Releasing
 
-Personal use, sideloaded (decision: not publishing to the Connect IQ Store for now). To install a new
-build: `tools/build_personal.sh fenix847mm`, copy `.personal-build/bin/achievements.prg` to the
-watch's `GARMIN/Apps/`, open the app once. A Store release would need the multi-user rework
-(per-user keys and pairing, a privacy policy, Garmin review); see the project plan.
+Sideloaded only for now: each user runs `../setup.sh`, which builds a user build with their own
+server baked in. There's no Connect IQ Store listing yet. That would need a Store submission,
+a privacy policy, and Garmin review.
 
-Before each push (no CI for the watch): build for `fenix847mm` with `-w` and check no new
-warnings/errors, run it in the simulator, `git status` shows nothing from `.personal-build/`, no
-key in any tracked file.
+To install a new build, copy `.personal-build/bin/WatchCrawler.prg` to the watch's `GARMIN/Apps/`
+and open the app once. Builds made before the rename were called `achievements.prg`: delete that
+file from the watch so you don't end up with two copies.
+
+Before each push (no CI for the watch):
+- Build both flavours with `-w` and check for new warnings or errors.
+- Run it in the simulator.
+- Check `git status` shows nothing from `.personal-build/`.
+- Check no key is in any tracked file.
 
 ## Fonts
 

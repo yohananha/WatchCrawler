@@ -31,7 +31,7 @@ class Notifier {
     static function notifyAchievement(a as Dictionary) as String {
         var tierUpper = (a["tier"] as String);
         tierUpper = tierUpper.toUpper();
-        var title = tierUpper + " ACHIEVEMENT";
+        var title = "system_notice".equals(a["eventType"]) ? "SYSTEM MESSAGE" : tierUpper + " ACHIEVEMENT";
         return notify(title, a["title"] as String, a["text"] as String);
     }
 

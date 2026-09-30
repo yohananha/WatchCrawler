@@ -5,13 +5,16 @@ import Toybox.PersistedContent;
 import Toybox.System;
 import Toybox.Time;
 
-// Polls POST <serverUrl>/trigger-test/consume on the background timer, so a
-// test achievement armed from a browser (the server's own "/" page) or curl
-// fires within one background cycle (~5 min) with no button press needed -
-// Connect IQ has no server-to-watch push for a private/sideloaded app, so
-// polling on the tick we already have is the only option. See
-// BackgroundService for where this is called, only when no real activity
-// was detected that cycle.
+// The watch's regular check-in with its server, on the background timer.
+// Every answer carries the day-event tuning (quiet hours, daily cap...) and
+// the API-credit notice (see SystemNotice).
+//
+// Developer builds (dev.jungle) poll POST <serverUrl>/trigger-test/consume
+// every cycle, so a test achievement armed from a browser (the server's own
+// "/" page) or curl fires within one background cycle (~5 min) - Connect IQ
+// has no server-to-watch push for a sideloaded app. User builds have no test
+// trigger: they GET /day-settings, at most every few hours, so the server
+// (which sleeps when idle) isn't woken all day. See BackgroundService.
 //
 // Singleton instance for the same reason as AchievementResolver: method(:sym)
 // needs a `self` to bind to.
@@ -35,11 +38,7 @@ class TriggerChecker {
     function checkAndConsume(callback as Method) as Void {
         _callback = callback;
 
-        // Server said the feature is off: don't wake it every cycle. Cleared
-        // whenever the app is opened (AchievementApp.onStart).
-        var skipUntil = Application.Storage.getValue("triggerSkipUntil");
-        if (skipUntil instanceof Number && Time.now().value() < skipUntil) {
-            BgStatus.setTrigger("skipped (server has test trigger off)");
+        if (shouldSkip()) {
             finish(false, null);
             return;
         }
@@ -56,23 +55,32 @@ class TriggerChecker {
         if (key != null) {
             headers.put("X-Watch-Key", key as String);
         }
+        WatchErr.addTo(headers);
         BgStatus.setTrigger("sending key=" + (key == null ? "none" : "set"));
 
         var options = {
-            :method => Communications.HTTP_REQUEST_METHOD_POST,
+            :method => requestMethod(),
             :headers => headers,
             :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON,
         };
 
         try {
-            Communications.makeWebRequest((url as String) + "/trigger-test/consume", {}, options, method(:onResponse));
+            Communications.makeWebRequest((url as String) + endpoint(), {}, options, method(:onResponse));
         } catch (ex) {
             BgStatus.setTrigger("threw: " + ex.getErrorMessage());
+            WatchErr.record("poll-threw", -1);
             finish(false, null);
         }
     }
 
     function onResponse(responseCode as Number, data as Null or Dictionary or String or PersistedContent.Iterator) as Void {
+        if (responseCode == 200 && data instanceof Dictionary) {
+            Application.Storage.setValue("settingsPolledAt", Time.now().value());
+            WatchErr.clear();
+            SystemNotice.store(data as Dictionary);
+        } else {
+            WatchErr.record("poll", responseCode);
+        }
         // Day-event tuning rides along on every poll (see server DayEventSettings).
         if (responseCode == 200 && data instanceof Dictionary && data["settings"] instanceof Dictionary) {
             var s = data["settings"] as Dictionary;
@@ -95,6 +103,50 @@ class TriggerChecker {
             BgStatus.setTrigger("HTTP " + responseCode + (responseCode == 200 ? " wasArmed=false" : ""));
             finish(false, null);
         }
+    }
+
+    // ---- build-specific behaviour ------------------------------------------
+
+    // Server said the test trigger is off: don't wake it every cycle. Cleared
+    // whenever the app is opened (AchievementApp.onStart).
+    (:dev)
+    private function shouldSkip() as Boolean {
+        var skipUntil = Application.Storage.getValue("triggerSkipUntil");
+        if (skipUntil instanceof Number && Time.now().value() < skipUntil) {
+            BgStatus.setTrigger("skipped (server has test trigger off)");
+            return true;
+        }
+        return false;
+    }
+
+    (:dev)
+    private function endpoint() as String {
+        return "/trigger-test/consume";
+    }
+
+    (:dev)
+    private function requestMethod() as Communications.HttpRequestMethod {
+        return Communications.HTTP_REQUEST_METHOD_POST;
+    }
+
+    // Settings and credit notices change slowly: check a few times a day.
+    (:user)
+    private function shouldSkip() as Boolean {
+        var last = Application.Storage.getValue("settingsPolledAt");
+        return last instanceof Number && Time.now().value() - (last as Number) < SETTINGS_EVERY_SEC;
+    }
+
+    (:user)
+    private const SETTINGS_EVERY_SEC = 3 * 3600;
+
+    (:user)
+    private function endpoint() as String {
+        return "/day-settings";
+    }
+
+    (:user)
+    private function requestMethod() as Communications.HttpRequestMethod {
+        return Communications.HTTP_REQUEST_METHOD_GET;
     }
 
     private function finish(armed as Boolean, kind as String?) as Void {

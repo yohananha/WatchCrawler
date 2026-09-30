@@ -219,6 +219,7 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
         int inTok = 0, outTok = 0, attempts = 0;
         var latency = TimeSpan.Zero;
         string? error = null;
+        var errorKind = LlmErrorKind.None;
         AchievementText? lastParsed = null;
 
         for (var attempt = 1; attempt <= 2; attempt++)
@@ -237,17 +238,22 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
                     if (FitsLimits(text))
                         return Done(text, isFallback: false, err: null);
                     error = $"Response exceeded length limits: {Overruns(text)}.";
+                    errorKind = LlmErrorKind.BadOutput;
                     user += $"\n\nYour previous answer was too long ({Overruns(text)}). Rewrite it shorter. Return ONLY the JSON object.";
                 }
                 else
                 {
                     error = "Response was not valid JSON.";
+                    errorKind = LlmErrorKind.BadOutput;
                     user += "\n\nYour previous answer was not valid JSON. Return ONLY the JSON object.";
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
             {
                 error = ex.Message;
+                errorKind = LlmErrors.Classify(ex);
+                // Retrying won't help until the user tops up / fixes the key.
+                if (errorKind is LlmErrorKind.OutOfCredit or LlmErrorKind.BadKey) break;
             }
         }
 
@@ -269,7 +275,10 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
                 IsFailure: tier == Tier.Cursed,
                 provider.Name, provider.Model, isFallback);
 
-            return new GenerationResult(achievement, inTok, outTok, latency, attempts, err);
+            return new GenerationResult(achievement, inTok, outTok, latency, attempts, err)
+            {
+                ErrorKind = err is null ? LlmErrorKind.None : errorKind
+            };
         }
     }
 

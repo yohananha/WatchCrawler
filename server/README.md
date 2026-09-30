@@ -1,127 +1,157 @@
-# WatchCrawler – שכבת ה-LLM
+# WatchCrawler server
 
-שרת קטן ב-ASP.NET Core (‎.NET 10, בלי חבילות חיצוניות) שמקבל אירוע מהשעון ומחזיר הישג סרקסטי.
-כולל מצב השוואה עיוורת בין ספקי LLM.
+A small ASP.NET Core service (.NET 10, no external packages). It receives an event from the watch
+and returns a sarcastic achievement written by an LLM. Each user runs their own copy with their own
+API key: `../setup.sh` deploys it to Fly.io from the prebuilt image
+`ghcr.io/yohananha/watchcrawler-server`. It also has a blind-comparison mode for picking an LLM.
 
-## מבנה
+## Files
 
-| קובץ | תפקיד |
+| File | Role |
 |---|---|
-| `Models.cs` | אירוע, הישג, הגדרות |
-| `Providers.cs` | ממשק `ILlmProvider` + מימוש Anthropic ומימוש OpenAI-compatible (DeepSeek, OpenRouter) |
-| `Achievements.cs` | חישוב tier וצליל (דטרמיניסטי), בניית prompt, היסטוריה, generator עם retry ו-fallback |
-| `Comparison.cs` | הרצת כל הספקים על אותם אירועים ודוח עיוור |
-| `Program.cs` | מצב API או מצב השוואה, אימות מפתח משותף |
-| `sample-events.json` | 10 אירועים לדוגמה – כדאי להחליף באירועים אמיתיים שלך |
-| `Tests/` | בדיקות יחידה (xUnit) ל-`TierCalculator` ו-`AchievementGenerator` |
-| `TestTrigger.cs` | דגל "טריגר בדיקה" כקובץ על ה-Volume, כולל סוג האירוע שנבחר בעמוד ה-`/` |
-| `DayEventSettings.cs` | שעות שקט / תקרה יומית / שעות אירועי סוף-יום, מה-env, נשלחים לשעון |
-| `Dockerfile`, `render.yaml` | דיפלוי ל-Render |
-| `fly.toml` | דיפלוי ל-Fly.io (חלופה – דורש כרטיס אשראי גם ל-tier החינמי) |
+| `Program.cs` | API endpoints, shared-key auth, startup checks, compare mode |
+| `StartupConfig.cs` | `LLM_PROVIDER` mapping; refuses to start without an API key or `WATCH_SHARED_KEY` |
+| `Models.cs` | Event, achievement, settings |
+| `Providers.cs` | `ILlmProvider`: Anthropic plus OpenAI-compatible (DeepSeek, OpenRouter); structured HTTP errors (out of credit, bad key) |
+| `Achievements.cs` | Tier and sound (deterministic), prompt, recent history, generator with retry/fallback |
+| `UsageTracker.cs` | Spend per month, credit left, low/out-of-credit notice for the watch |
+| `ErrorReporter.cs` | Scrubbed failure reports and a daily digest to the developer's ntfy topic |
+| `Comparison.cs` | Runs every provider on the same events and writes a blind report |
+| `TestTrigger.cs` | Remote test trigger flag (a file on the volume) |
+| `DayEventSettings.cs` | Quiet hours, daily cap and end-of-day event hours from env vars, sent to the watch |
+| `Dockerfile`, `fly.toml`, `render.yaml` | Deploy configs |
+| `.env.example` | Every setting, with an explanation |
+| `Tests/` | xUnit tests |
 
-## הרצה
+## Endpoints
 
-מגדירים מפתח רק לספקים שיש לך (ספק בלי מפתח פשוט מדולג):
+All except `/health` and `/` need the `X-Watch-Key` header.
 
-```powershell
-$env:ANTHROPIC_API_KEY = "sk-ant-..."
-$env:DEEPSEEK_API_KEY  = "sk-..."
-$env:OPENROUTER_API_KEY = "sk-or-..."   # וגם לעדכן Model ב-appsettings.json
-```
+| Endpoint | Use |
+|---|---|
+| `POST /achievement` | Event in, achievement out. The response also carries `notice` (credit warning, or null) |
+| `GET /day-settings` | Polled by user watch builds a few times a day: day-event `settings` plus `notice` |
+| `GET /usage` | Spend this month, projected monthly cost, credit left (`setup.sh --usage`) |
+| `POST/GET /trigger-test?kind=…`, `POST /trigger-test/consume` | Remote test trigger (dev watch builds; `ENABLE_TEST_TRIGGER=true`) |
+| `GET /health` | Liveness |
 
-### השוואה עיוורת
+The watch may also send `X-Watch-Error` (its last failure) on any request. It is forwarded to the
+error reports.
+
+## Settings (env vars)
+
+See [`.env.example`](.env.example) for the full list. Put secrets in `fly secrets` (setup does
+this), never in `fly.toml`.
+
+| Variable | Role |
+|---|---|
+| `LLM_PROVIDER` | `anthropic` (default) or `deepseek` |
+| `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` | **Secret.** The key for the chosen provider |
+| `WATCH_SHARED_KEY` | **Secret.** The watch sends it on every request. Required, unless `ALLOW_NO_WATCH_KEY=true` for local testing |
+| `CREDIT_BALANCE_USD` | Credit the user bought. Anthropic keys can't read their own balance, so the server subtracts tracked spend from this. Changing the value (a top-up) resets the count |
+| `USER_NTFY_URL` | Optional: the user's own ntfy topic for credit alerts |
+| `REPORT_ERRORS` | `false` turns off error reports to the developer |
+| `Llm__EstimatedEventsPerDay` | Used for the cost estimate before there is real usage |
+| `DATA_DIR` | Where state files live (`/data` on the volume): install id, usage, report counters |
+| `HISTORY_STATE_PATH`, `TRIGGER_STATE_PATH` | Joke history and test-trigger flag files |
+| `ENABLE_TEST_TRIGGER` | `true` enables the test trigger page and polling. Default `false` |
+| `DAY_QUIET_FROM` / `DAY_QUIET_TO` | Quiet hours (default 23–7): no day events |
+| `DAY_MAX_PER_DAY` | Daily cap on announcements (10) |
+| `DAY_IDLE_HOUR` / `DAY_GOAL_HOUR` | After which hour "nothing achieved today" (22) and "step goal missed" (21) may fire |
+| `BUILD_STAMP` | Set by CI at image build time; shown in error reports |
+
+`DAY_*` changes reach the watch on its next poll, with no reinstall. Invalid values fall back to
+the defaults.
+
+## Cost and credit
+
+Every LLM call's tokens are priced with `InputPricePerM` / `OutputPricePerM` from
+`appsettings.json`. `AvgInputTokens` / `AvgOutputTokens` (about 1,200 in and 80 out) drive the
+estimate before any real usage exists.
+
+The remaining credit comes from one of these:
+- DeepSeek's `GET /user/balance`, checked at most every 12 hours.
+- Otherwise `CREDIT_BALANCE_USD` minus the tracked spend.
+
+An "out of credit" API error always wins: Anthropic returns 400 "credit balance is too low" and
+DeepSeek returns 402. States:
+
+- `ok`.
+- `low`: less than 14 days left at the recent rate.
+- `out`.
+
+When the state is low or out, the watch shows a "Mana Reserves Low" / "Out of Mana" System message
+once a day. The developer's reports and the user's `USER_NTFY_URL` are told once, when the state
+changes.
+
+## Error reports
+
+`ErrorReporter` posts to `Reporting:NtfyUrl` in `appsettings.json`. It reports:
+
+- Unhandled exceptions.
+- LLM failures that fell back to canned text.
+- A rejected API key.
+- Credit state changes.
+- Watch-side errors.
+- A one-time "new install" message.
+- Startup config errors.
+
+Before anything is sent:
+- API keys, the shared key, bearer tokens, long tokens and URL query strings are stripped.
+- No activity data or profile text is included.
+
+Each error kind is sent at most once an hour. All of them are counted into a daily digest, which
+goes out with ntfy's `Email` header to `Reporting:DigestEmail`. The server sleeps when idle, so the
+digest is sent on the first request after 24 hours rather than from a timer. State is kept in
+`DATA_DIR`.
+
+## Running locally
 
 ```bash
-dotnet run -- compare sample-events.json           # הדוח מציג את הספק והמודל ליד כל תשובה
-dotnet run -- compare sample-events.json --blind   # השוואה עיוורת
-```
-
-נוצרים שני קבצים:
-- `compare-report.md` – לכל אירוע התשובות תחת A/B/C, עם עמודת Model. עם `--blind` העמודה מוסתרת והסדר מעורבב – נותנים ציון בלי להציץ.
-- `compare-key.json` – איזו אות שייכת לאיזה ספק, ושגיאות לכל תשובה. במצב עיוור פותחים רק אחרי הציונים.
-
-בקונסול מודפסת טבלה עם זמן תגובה ממוצע, טוקנים, fallbacks ועלות חודשית משוערת
-(לפי `EstimatedEventsPerDay` והמחירים ב-appsettings).
-
-### מצב API
-
-```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+export ALLOW_NO_WATCH_KEY=true        # or set WATCH_SHARED_KEY and send it as X-Watch-Key
+export REPORT_ERRORS=false            # don't send your local experiments to the developer
 dotnet run
+curl -X POST http://localhost:5080/achievement -H "Content-Type: application/json" \
+  -d '{"type":"activity_completed","value":10.2,"unit":"km","baselineMean":8,"baselineStd":1.5}'
 ```
+
+Or with Docker, from the repo root: `docker compose up` (reads `.env`).
+
+### Blind comparison between providers
+
+Set a key for each provider you have. Providers without a key are skipped. Then run:
 
 ```bash
-curl -X POST http://localhost:5080/achievement \
-  -H "Content-Type: application/json" \
-  -H "X-Watch-Key: <ה-WATCH_SHARED_KEY שלך, אם מוגדר>" \
-  -d '{"type":"sleep_summary","value":5.1,"unit":"hours","baselineMean":6.9,"baselineStd":0.6}'
+dotnet run -- compare sample-events.json           # the report shows the provider/model next to each answer
+dotnet run -- compare sample-events.json --blind   # hidden and shuffled; the key goes to compare-key.json
 ```
 
-אם `WATCH_SHARED_KEY` לא מוגדר (למשל בפיתוח מקומי) – האימות כבוי לגמרי.
+The console prints average latency, tokens, fallbacks and the estimated monthly cost.
 
-### בדיקות
+### Tests
 
 ```bash
-cd Tests && dotnet test
+dotnet test Tests/GarminAchievements.Tests.csproj
 ```
 
-רץ אוטומטית ב-CI (`.github/workflows/ci.yml`) בכל push/PR.
+CI runs them on every push and PR, then builds the Docker image. On `main` and on `v*` tags it
+publishes the image to GHCR.
 
-### דיפלוי ל-Render
+## Design decisions
 
-1. [dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint** → מחברים את
-   `yohananha/WatchCrawler` (דורש הרשאת GitHub ל-Render, דבר שרק אתם יכולים לאשר).
-2. Render מזהה את `render.yaml` אוטומטית.
-3. אחרי הדיפלוי הראשון: **Environment** → מוסיפים `ANTHROPIC_API_KEY` ו-`WATCH_SHARED_KEY` (לא
-   שמורים בקוד).
+- **Tier and sound are decided in code, not by the model.** They come from a z-score against the
+  user's own baseline:
+  - ≤ -1 → cursed.
+  - ≥ 0.6 → rare.
+  - ≥ 1.3 → epic.
+  - ≥ 2 → legendary.
 
-Render נותן HTTPS אוטומטית (נדרש – Connect IQ מסרב לבקשות HTTP רגילות, קוד תגובה -1001
-`SECURE_CONNECTION_REQUIRED`). ה-tier החינמי נרדם אחרי חוסר פעילות – הבקשה הראשונה בכל יום
-תיקח כמה שניות נוספות (cold start).
-
-### חלופה: Fly.io
-
-דורש כרטיס אשראי גם ל-tier החינמי (בדקנו – ה-trial כבר לא מספיק). אם יש לכם כרטיס רשום:
-
-```bash
-fly auth login
-fly apps create <שם-ייחודי>          # ולעדכן ב-fly.toml
-fly secrets set ANTHROPIC_API_KEY=sk-ant-... WATCH_SHARED_KEY=<מחרוזת אקראית>
-fly deploy
-```
-
-## משתני סביבה (Fly: `fly.toml` בסעיף `[env]`, סודות עם `fly secrets set`)
-
-| משתנה | תפקיד |
-|---|---|
-| `ANTHROPIC_API_KEY`, `WATCH_SHARED_KEY` | **סודות** – רק ב-`fly secrets` |
-| `ENABLE_TEST_TRIGGER` | `true` = עמוד הבדיקה בסלקטור סוג אירוע והשעון בודק טריגר. ברירת מחדל `false` |
-| `TRIGGER_STATE_PATH` | קובץ הדגל על ה-Volume (`/data/trigger.flag`) |
-| `HISTORY_STATE_PATH` | היסטוריית "אל תחזור על בדיחות" על ה-Volume (`/data/history.json`); בלי זה – בזיכרון בלבד |
-| `DAY_QUIET_FROM` / `DAY_QUIET_TO` | שעות שקט (ברירת מחדל 23–7) – אין אירועי יום בשעות האלה |
-| `DAY_MAX_PER_DAY` | תקרה יומית להכרזות (10) |
-| `DAY_IDLE_HOUR` / `DAY_GOAL_HOUR` | אחרי איזו שעה "לא השגת כלום היום" (22) / "פספסת את יעד הצעדים" (21) |
-
-שינוי ב-`DAY_*` נכנס לשעון בבדיקת הטריגר הבאה, בלי התקנה מחדש. ערך לא חוקי → ברירת המחדל.
-
-### נקודות קצה
-
-`POST /achievement` (הישג מ-LLM), `GET /health`, `POST/GET /trigger-test?kind=…`,
-`POST /trigger-test/consume` (השעון; מחזיר גם את `settings` של אירועי היום). כולן חוץ מ-health
-מוגנות ב-`X-Watch-Key`.
-
-## החלטות עיצוב
-
-- **ה-tier והצליל נקבעים בקוד, לא ע"י המודל.** z-score מול הבסיס האישי: ‎≤ ‎-1 → cursed,
-  ‏‎≥ 0.6 → rare, ‏‎≥ 1.3 → epic, ‏‎≥ 2 → legendary. כך האנימציה בשעון עקבית.
-- **המודל כותב רק title / text / reward.** JSON לא תקין או ארוך מדי → ניסיון נוסף; אם גם הוא ארוך – קיצוץ; אם נכשל לגמרי – בנק fallback קטן.
-- **היסטוריית 10 ההישגים האחרונים** נשלחת במצב API כדי למנוע חזרות, ונשמרת כקובץ JSON על ה-Volume
-  (`HISTORY_STATE_PATH`) כדי לשרוד עצירות idle של Fly. משתמש יחיד – קובץ מספיק, לא צריך DB.
-- **Language** ב-appsettings קובע את שפת ההודעות. שים לב: לעברית על השעון יידרש פונט מותאם ב-Connect IQ.
-
-## מה חסר (שלבים הבאים)
-
-- חיבור ל-Strava (סוג פעילות מדויק: כוח / HIIT / יוגה) – ראו את התוכנית (שלב 5).
-- ריבוי משתמשים (מפתח לכל משתמש, DB, pairing) – במכוון מחוץ לתחום כרגע.
-- push לטלפון במקביל לתשובה לשעון.
-- בדיקת אינטגרציה מלאה מקצה לקצה (שעון אמיתי → Fly.io → LLM אמיתי) – נבדק עד כה רק
-  עד גבול ה-HTTPS (ראו `watch/README.md`).
+  This keeps the watch animation consistent.
+- **The model only writes the title, text and reward.**
+  - Invalid or too-long JSON gets one retry. If the retry is still too long, it's trimmed.
+  - If it fails completely, the server uses a small fallback bank.
+  - It doesn't retry when the account is out of credit or the key is bad.
+- **The last 10 achievements** go into the prompt to avoid repeats. They're kept as a JSON file on
+  the volume.
+- **One server per user**, so files are enough and there's no database.
