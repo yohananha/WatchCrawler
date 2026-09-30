@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/hero.png" alt="A jogger sprinting through a dungeon under glowing System achievement pop-ups" width="100%">
+  <img src="docs/hero.jpg" alt="A jogger sprinting through a dungeon under glowing System achievement pop-ups" width="100%">
 </p>
 
 <h1 align="center">WatchCrawler</h1>
