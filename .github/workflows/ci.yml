@@ -59,6 +59,7 @@ jobs:
         run: >
           docker build ./server
           --build-arg BUILD_STAMP=${GITHUB_SHA::7}
+          --build-arg REPORTING_NTFY_URL=${{ secrets.NTFY_URL }}
           -t ${{ steps.img.outputs.name }}:latest
           -t ${{ steps.img.outputs.name }}:${GITHUB_SHA::7}
 

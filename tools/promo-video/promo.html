@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WatchCrawler Promo</title>
+<style>
+  html, body { margin: 0; background: #0b0710; color: #ddd; font: 14px system-ui, sans-serif; }
+  #stage { display: block; margin: 0 auto; height: 88vh; width: auto; image-rendering: pixelated; }
+  #controls { display: flex; gap: 12px; align-items: center; justify-content: center; padding: 8px; }
+  #controls input[type=range] { width: 60vw; }
+  body.headless #controls { display: none; }
+  body.headless #stage { height: auto; margin: 0; }
+</style>
+</head>
+<body>
+<canvas id="stage" width="1080" height="1920"></canvas>
+<div id="controls">
+  <button id="play">Play</button>
+  <input id="scrub" type="range" min="0" max="1" step="0.001" value="0">
+  <span id="clock">0.00s</span>
+</div>
+<script>
+// Social promo for WatchCrawler: a frame-deterministic replica of the watch
+// popup (watch/source/AchievementView.mc + anim/*), drawn with the watch's own
+// bitmap fonts. render.mjs calls renderFrame(t) for every frame; opening this
+// page in a browser gives a scrubber for previewing.
+
+// ---- Edit the video here --------------------------------------------------
+
+const FPS = 30;
+const SPEED = 1.0;         // watch animation speed relative to the real watch
+const TYPE_RATE = 22;      // commentary chars/sec (the watch uses 26)
+const PUNCH_RATE = 16;     // reward punchline chars/sec (the watch uses 20)
+const READ_HOLD = 1.5;     // seconds a fully typed screen stays up before moving on
+
+const ACHIEVEMENTS = [
+  {
+    caption: ["FINISH A RUN"],
+    tier: "legendary",
+    hero: "RUNNING",
+    title: "Outran Your Own Excuses",
+    stat: "10.2 KM",
+    text: "18% further than usual. The System is mildly impressed.",
+    reward: "A slightly less judgmental stare. Enjoy it while it lasts.",
+  },
+  {
+    caption: ["HIT YOUR GOAL"],
+    tier: "rare",
+    hero: "STEPS",
+    title: "Goal Crushed, Knees Filed Complaint",
+    stat: "12,500 STEPS",
+    text: "The goal was 10,000. Nobody asked for more.",
+    reward: "Bonus steps, zero XP. No overtime pay.",
+  },
+  {
+    caption: ["OR DON'T."],
+    tier: "cursed",
+    hero: "COUCH",
+    title: "Professional Furniture Tester",
+    stat: "412 STEPS",
+    text: "412 steps. The couch filed a restraining order.",
+    reward: "A participation trophy made of lint. We believe in you. Barely.",
+  },
+];
+
+const HALL_OF_SHAME = [
+  { tier: "cursed", title: "Professional Furniture Tester", stat: "412 steps" },
+  { tier: "rare", title: "Goal Crushed, Knees Filed Complaint", stat: "12,500 steps" },
+  { tier: "epic", title: "Personal Record, Allegedly", stat: "5 km in 23:30" },
+  { tier: "legendary", title: "Outran Your Own Excuses", stat: "10.2 km" },
+];
+
+const HOOK = { caption: ["YOUR WATCH", "HAS OPINIONS."], dur: 3.2 };
+const HOS = { caption: ["EVERY SHAME,", "ARCHIVED."], perItem: 1.1 };
+const CTA = {
+  dur: 4.2,
+  lines: [
+    "Your Garmin, narrated by",
+    "a sarcastic dungeon System.",
+    "",
+    "Open source. Your own AI key.",
+    "About 50 cents a month.",
+  ],
+  url: "github.com/yohananha/WatchCrawler",
+};
+
+// ---- Palette.mc / Easing.mc ------------------------------------------------
+
+const CANDY = [0xFF9EC7, 0x9EE7FF, 0xFFE39E, 0xC9A8FF, 0xA8FFC9];
+const GOLD = [0xFFF6B0, 0xFFD83D, 0xFFB020, 0xFFE680];
+const RED = [0xFF4A4A];
+const CYAN_MINT = [0x9EE7FF, 0xA8FFC9];
+const PURPLE_PINK = [0xC9A8FF, 0xFF9EC7];
+const SHADOW = 0x2A1030;
+
+const forTier = t => ({ cursed: RED, rare: CYAN_MINT, epic: PURPLE_PINK, legendary: GOLD }[t] || CANDY);
+const tierWordColor = t => t === "legendary" ? GOLD : t === "cursed" ? RED : forTier(t);
+const ringColor = t => ({ cursed: 0xFF4A4A, rare: 0x9EE7FF, epic: 0xC9A8FF, legendary: 0xFFD83D }[t] || 0xCCCCCC);
+const tierColorPair = t => ({
+  cursed: [0xFF8A8A, 0x7A1F2A], rare: [0x8EEBFF, 0x1F6E85], epic: [0xCDB0FF, 0x4B2A99], legendary: [0xFFE08A, 0x8A6414],
+}[t] || [0xD4D4DC, 0x56565F]);
+
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const outBack = p => { const c1 = 1.70158, c3 = c1 + 1, x = p - 1; return 1 + c3 * x * x * x + c1 * x * x; };
+const outCubic = p => { const x = 1 - p; return 1 - x * x * x; };
+const hex = c => "#" + c.toString(16).padStart(6, "0");
+
+// ---- Bitmap fonts (AngelCode .fnt + .png from watch/resources/fonts) -------
+
+const FONT_DIR = "../../watch/resources/fonts/";
+const F = {};
+
+async function loadFont(name) {
+  const txt = await (await fetch(FONT_DIR + name + ".fnt")).text();
+  const img = new Image();
+  img.src = FONT_DIR + name + ".png";
+  await img.decode();
+  const chars = {};
+  let lineHeight = 0;
+  for (const line of txt.split(/\r?\n/)) {
+    const kv = {};
+    for (const m of line.matchAll(/(\w+)=("[^"]*"|-?\d+)/g)) kv[m[1]] = m[2];
+    if (line.startsWith("common")) lineHeight = +kv.lineHeight;
+    if (line.startsWith("char ")) {
+      chars[String.fromCharCode(+kv.id)] = {
+        x: +kv.x, y: +kv.y, w: +kv.width, h: +kv.height, xo: +kv.xoffset, yo: +kv.yoffset, adv: +kv.xadvance,
+      };
+    }
+  }
+  return { name, img, chars, lineHeight, tinted: {} };
+}
+
+function tinted(font, color) {
+  if (!font.tinted[color]) {
+    const c = document.createElement("canvas");
+    c.width = font.img.width; c.height = font.img.height;
+    const g = c.getContext("2d");
+    g.drawImage(font.img, 0, 0);
+    g.globalCompositeOperation = "source-in";
+    g.fillStyle = hex(color);
+    g.fillRect(0, 0, c.width, c.height);
+    font.tinted[color] = c;
+  }
+  return font.tinted[color];
+}
+
+function textWidth(s, font) {
+  let w = 0;
+  for (const ch of s) w += (font.chars[ch] || font.chars[" "]).adv;
+  return w;
+}
+
+// Draws with the top-left at (x, y), like Graphics.TEXT_JUSTIFY_LEFT on the watch.
+function drawText(g, x, y, font, s, color, scale = 1) {
+  const atlas = tinted(font, color);
+  for (const ch of s) {
+    const c = font.chars[ch] || font.chars[" "];
+    if (c.w > 0) {
+      g.drawImage(atlas, c.x, c.y, c.w, c.h, x + c.xo * scale, y + c.yo * scale, c.w * scale, c.h * scale);
+      if (window.boundsLog && g === sg) checkGlyph(ch, s, x + c.xo, y + c.yo, c.w, c.h);
+    }
+    x += c.adv * scale;
+  }
+}
+
+// Verification aid (render.mjs checks every frame): records any glyph that falls
+// outside the watch's dot ring. Tests the glyph cell's corners, so it is strict.
+function checkGlyph(ch, s, x, y, w, h) {
+  if (ch === " ") return;
+  const R = 201; // inner edge of the ring dots
+  for (const [px, py] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+    if (Math.hypot(px - 227, py - 227) > R) {
+      window.boundsLog.push({ ch, s, x: Math.round(x), y: Math.round(y) });
+      return;
+    }
+  }
+}
+
+function drawTextCentered(g, cx, y, font, s, color, scale = 1) {
+  drawText(g, Math.round(cx - textWidth(s, font) * scale / 2), y, font, s, color, scale);
+}
+
+function fitFont(s, candidates, maxWidth) {
+  for (const f of candidates) if (textWidth(s, f) <= maxWidth) return f;
+  return candidates[candidates.length - 1];
+}
+
+// TextWrap.wrap: greedy word wrap to a fixed width.
+function wrap(s, font, maxWidth) {
+  const lines = [];
+  let cur = "";
+  for (const word of s.split(" ")) {
+    const next = cur ? cur + " " + word : word;
+    if (cur && textWidth(next, font) > maxWidth) { lines.push(cur); cur = word; } else cur = next;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+// ---- anim/*.mc ports ---------------------------------------------------------
+
+function wave(g, text, font, cx, y, palette, t, stagger, shimmerHz, scale = 1) {
+  if (t < 0 || !text) return;
+  let x = Math.round(cx - textWidth(text, font) * scale / 2);
+  const shimmerStep = shimmerHz > 0 ? Math.floor(t * shimmerHz) : 0;
+  let i = 0;
+  for (const ch of text) {
+    const localT = t - i * stagger;
+    if (localT >= 0) {
+      const e = outBack(clamp01(localT / 0.35));
+      const drop = Math.trunc((1 - e) * 26) * scale;
+      const color = palette[(i + shimmerStep) % palette.length];
+      drawText(g, x + 2 * scale, y + drop + 2 * scale, font, ch, SHADOW, scale);
+      drawText(g, x, y + drop, font, ch, color, scale);
+    }
+    x += (font.chars[ch] || font.chars[" "]).adv * scale;
+    i++;
+  }
+}
+
+function ring(g, cx, cy, radius, dot, count, color, phase, t) {
+  g.fillStyle = hex(color);
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * 2 * Math.PI - Math.PI / 2;
+    let lit;
+    if (phase === 0) lit = i / count < outCubic(clamp01(t / 0.9));
+    else if (phase === 1) lit = (((i - Math.floor(t * 14)) % count) + count) % count < 8;
+    else lit = Math.sin(t * 6 + i * 2.1) > 0.2;
+    if (!lit) continue;
+    g.fillRect(cx + Math.trunc(Math.cos(angle) * radius) - dot / 2, cy + Math.trunc(Math.sin(angle) * radius) - dot / 2, dot, dot);
+  }
+}
+
+function burst(g, cx, cy, palette, n, reach, t, dur) {
+  if (t < 0 || t > dur) return;
+  const e = outCubic(clamp01(t / dur));
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * 2 * Math.PI + (i % 2) * 0.15;
+    const r = e * reach * (0.7 + ((i * 37) % 10) / 30);
+    const s = 4 + (i % 3) * 2;
+    g.fillStyle = hex(palette[i % palette.length]);
+    g.fillRect(cx + Math.trunc(Math.cos(angle) * r) - s / 2, cy + Math.trunc(Math.sin(angle) * r) - s / 2, s, s);
+  }
+}
+
+function typeText(g, text, font, cx, y, color, t, rate, hot) {
+  if (t < 0) return;
+  const n = Math.min(Math.floor(t * rate), text.length);
+  const shown = text.substring(0, n);
+  const hotStart = hot && shown.endsWith(hot) ? shown.length - hot.length : -1;
+  const cursor = n < text.length || Math.floor(t * 3) % 2 === 0;
+  let x = Math.round(cx - (textWidth(shown, font) + (cursor ? textWidth("_", font) : 0)) / 2);
+  if (hotStart >= 0) {
+    const pre = shown.substring(0, hotStart);
+    drawText(g, x, y, font, pre, color); x += textWidth(pre, font);
+    drawText(g, x, y, font, hot, RED[0]); x += textWidth(hot, font);
+  } else {
+    drawText(g, x, y, font, shown, color); x += textWidth(shown, font);
+  }
+  if (cursor) drawText(g, x, y, font, "_", color);
+}
+
+const ICONS = {
+  star: ["....1....", "...111...", "111111111", ".1111111.", "..11111..", "..11111..", ".111.111.", ".11...11.", "1.......1"],
+  diamond: ["....1....", "...111...", "..11111..", ".1111111.", "111111111", ".1111111.", "..11111..", "...111...", "....1...."],
+  skull: [".1111111.", "111111111", "11.111.11", "11.111.11", "111111111", ".1111111.", "..1.1.1..", "..1.1.1..", "........."],
+};
+
+function tierIcon(g, tier, cx, top, cell, pair) {
+  if (tier === "common" || cell < 1) return;
+  const grid = tier === "rare" ? ICONS.diamond : tier === "cursed" ? ICONS.skull : ICONS.star;
+  const left = cx - Math.trunc(9 * cell / 2);
+  const shadow = cell > 3 ? Math.trunc(cell / 2) : 1;
+  for (const [dx, color] of [[shadow, pair[1]], [0, pair[0]]]) {
+    g.fillStyle = hex(color);
+    for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) {
+      if (grid[r][c] === "1") g.fillRect(left + dx + c * cell, top + dx + r * cell, cell, cell);
+    }
+  }
+}
+
+// ---- AchievementView.mc ----------------------------------------------------
+
+function prepareAchievement(a) {
+  a.palette = forTier(a.tier);
+  const P = a.palette;
+  const hero = a.hero.toUpperCase(), title = a.title.toUpperCase(), stat = a.stat.toUpperCase();
+
+  // Record scene, laid out top to bottom so a two-line title pushes the rest down.
+  const heroFont = fitLine(hero, [F.px56, F.px46, F.px38, F.px30], 90);
+  const titleBlock = fitLines(title, [F.px24, F.px16], 162, 2, 0);
+  const statY = titleBlock.bottom + 12;
+  const statFont = fitLine(stat, [F.px38, F.px30, F.px24, F.px16], statY);
+  const commentY = statY + statFont.lineHeight + 20;
+  const comment = fitLines(a.text, [F.sk22, F.sk18], commentY, 6, CURSOR_W);
+  a.record = { heroFont, titleBlock, statY, statFont, comment };
+
+  // Reward scene: main line in the pixel font, then the typed punchline.
+  const idx = a.reward.indexOf(". ");
+  const main = (idx >= 0 ? a.reward.substring(0, idx + 1) : a.reward).toUpperCase();
+  const mainBlock = fitLines(main, [F.px24, F.px16], 208, 3, 0);
+  const punch = idx >= 0 ? a.reward.substring(idx + 1).trimStart().toUpperCase() : null;
+  a.reward2 = { mainBlock, punch: punch ? fitLines(punch, [F.sk22, F.sk18], mainBlock.bottom + 6, 3, CURSOR_W) : null };
+
+  const unlockWord = a.tier.toUpperCase();
+  a.unlockFont = fitLine(unlockWord, [F.px46, F.px38, F.px30], 258);
+
+  a.durUnlock = 3.0;
+  a.durRecord = Math.max(5, 1.6 + a.text.length / TYPE_RATE + READ_HOLD);
+  a.durReward = punch ? 1.6 + punch.length / PUNCH_RATE + READ_HOLD : 4;
+  a.animTotal = a.durUnlock + a.durRecord + a.durReward;
+}
+
+// Typed lines, one after another at `rate`, the last one optionally ending in a red hot word.
+function typeLines(g, block, cx, color, t, rate, hot) {
+  let chars = 0;
+  block.lines.forEach((l, i) => {
+    const last = i === block.lines.length - 1;
+    typeText(g, l.text, block.font, cx, l.y, color, t - chars / rate, rate, last ? hot : null);
+    chars += l.text.length + 1;
+  });
+}
+
+function drawAchievement(g, a, t) {
+  const cx = 227, cy = 227, rr = 227 - 22;
+  let scene = 0;
+  if (t >= a.durUnlock) { scene = 1; t -= a.durUnlock; }
+  if (scene === 1 && t >= a.durRecord) { scene = 2; t -= a.durRecord; }
+  ring(g, cx, cy, rr, 8, 40, ringColor(a.tier), scene, t);
+  const P = a.palette, cursed = a.tier === "cursed", legendary = a.tier === "legendary";
+
+  if (scene === 0) {
+    wave(g, "ACHIEVEMENT", F.px24, cx, 118, P, t - 0.3, 0.04, 0);
+    wave(g, cursed ? "UNLOCKED?" : "UNLOCKED", F.px30, cx, 160, P, t - 0.6, 0.05, 0);
+    burst(g, cx, 258, cursed ? RED : GOLD, cursed ? 10 : 18, cursed ? 90 : 160, t - 1.6, 1.0);
+    const iconT = t - 1.4;
+    if (iconT > 0) tierIcon(g, a.tier, cx, 206, iconT < 0.15 ? 3 : iconT < 0.3 ? 4 : 5, tierColorPair(a.tier));
+    wave(g, a.tier.toUpperCase(), a.unlockFont, cx, 258, tierWordColor(a.tier), t - 1.8, 0.06, legendary ? 8 : 0);
+  } else if (scene === 1) {
+    const r = a.record;
+    wave(g, a.hero.toUpperCase(), r.heroFont, cx, 90, P, t - 0.1, 0.08, 0);
+    r.titleBlock.lines.forEach((l, i) => wave(g, l.text, r.titleBlock.font, cx, l.y, P, t - 0.5 - i * 0.3, 0.03, 0));
+    wave(g, a.stat.toUpperCase(), r.statFont, cx, r.statY, P, t - 0.9, 0.04, 0);
+    burst(g, cx, r.statY + 18, P, 12, 110, t - 1.3, 0.8);
+    typeLines(g, r.comment, cx, P[2 % P.length], t - 1.6, TYPE_RATE, null);
+  } else {
+    const head = cursed ? RED : GOLD;
+    wave(g, cursed ? "REWARD?" : "REWARD", F.px38, cx, 132, head, t - 0.1, 0.06, legendary ? 8 : 0);
+    burst(g, cx, 156, head, 14, 140, t - 0.2, 0.9);
+    const barW = Math.trunc(outCubic(clamp01((t - 0.6) / 0.3)) * 100);
+    if (barW > 0) { g.fillStyle = hex(P[0]); g.fillRect(cx - barW / 2, 184, barW, 3); }
+    const { mainBlock, punch } = a.reward2;
+    mainBlock.lines.forEach((l, i) => wave(g, l.text, mainBlock.font, cx, l.y, P, t - (0.8 + i * 0.2), 0.03, 0));
+    if (punch) {
+      const lastLine = punch.lines[punch.lines.length - 1].text;
+      typeLines(g, punch, cx, P[2 % P.length], t - 1.6, PUNCH_RATE, lastLine.split(" ").pop());
+    }
+  }
+}
+
+// ---- Keeping text inside the round screen ------------------------------------
+// The watch wraps to a fixed 380px, which spills past the circle near the top
+// and bottom. Here every line is fit against the circle's width at its own y.
+
+const SAFE_R = 196;        // ring dots sit at r=205 (8px), keep text inside them
+const CURSOR_W = 12;       // room for the typing cursor
+const chord = y => 2 * Math.sqrt(Math.max(0, SAFE_R * SAFE_R - (y - 227) * (y - 227)));
+// Usable width for a line whose box spans [top, top + h].
+const safeWidth = (top, h) => Math.min(chord(top), chord(top + h)) - 8;
+
+// Biggest font whose single line fits the circle at `top`.
+function fitLine(s, fonts, top) {
+  for (const f of fonts) if (textWidth(s, f) <= safeWidth(top, f.lineHeight)) return f;
+  console.warn("does not fit:", s);
+  return fonts[fonts.length - 1];
+}
+
+// Greedy word wrap where each line gets the circle's width at its own y.
+// Tries each font (biggest first) until the text fits in `maxLines`.
+function fitLines(s, fonts, top, maxLines, extra) {
+  for (const f of fonts) {
+    const lh = f.lineHeight + 3;
+    const lines = [];
+    let cur = "", ok = true;
+    for (const word of s.split(" ")) {
+      const y = top + lines.length * lh;
+      const next = cur ? cur + " " + word : word;
+      if (textWidth(next, f) + extra <= safeWidth(y, f.lineHeight)) { cur = next; continue; }
+      if (!cur) { ok = false; break; }
+      lines.push({ text: cur, y });
+      cur = word;
+      if (textWidth(cur, f) + extra > safeWidth(top + lines.length * lh, f.lineHeight)) { ok = false; break; }
+    }
+    if (ok && cur) lines.push({ text: cur, y: top + lines.length * lh });
+    if (ok && lines.length <= maxLines) return { font: f, lines, bottom: top + lines.length * lh };
+  }
+  console.warn("does not fit:", s);
+  const f = fonts[fonts.length - 1];
+  const lines = wrap(s, f, 300).map((text, i) => ({ text, y: top + i * (f.lineHeight + 3) }));
+  return { font: f, lines, bottom: top + lines.length * (f.lineHeight + 3) };
+}
+
+function shadowedLine(g, s, cx, y, font, pair) {
+  drawTextCentered(g, cx + 1, y + 2, font, s, pair[1]);
+  drawTextCentered(g, cx, y, font, s, pair[0]);
+}
+
+function fitBlock(text, top, bottom, fonts) {
+  for (const f of fonts) {
+    const lh = f.lineHeight + 4;
+    const lines = wrap(text, f, chord(top) - 10);
+    const h = lines.length * lh;
+    if (h <= bottom - top && lines.every((l, i) => textWidth(l, f) <= chord(top + i * lh))) {
+      const start = top + Math.round((bottom - top - h) / 2);
+      return { font: f, lines: lines.map((l, i) => ({ text: l, top: start + i * lh })) };
+    }
+  }
+  const f = fonts[fonts.length - 1];
+  return { font: f, lines: wrap(text, f, 300).map((l, i) => ({ text: l, top: top + i * (f.lineHeight + 4) })) };
+}
+
+function drawHallOfShame(g, index) {
+  const cx = 227, item = HALL_OF_SHAME[index], pair = tierColorPair(item.tier);
+  shadowedLine(g, `${index + 1}/${HALL_OF_SHAME.length}`, cx, 48, F.px16, [0x9A9AA4, 0x000000]);
+  const tierWord = item.tier.toUpperCase();
+  shadowedLine(g, tierWord, cx, 78, F.px24, pair);
+  tierIcon(g, item.tier, cx - textWidth(tierWord, F.px24) / 2 - 26, 78, 3, pair);
+  const fit = fitBlock(item.title.toUpperCase(), 114, 272, [F.px38, F.px30, F.px24, F.px16]);
+  for (const l of fit.lines) shadowedLine(g, l.text, cx, l.top, fit.font, pair);
+  drawTextCentered(g, cx, 286, textWidth(item.stat, F.sk22) <= chord(300) ? F.sk22 : F.sk18, item.stat, 0xECECF2);
+  drawTextCentered(g, cx, 330, F.sk18, "SELECT replay", 0xB4B4BE);
+}
+
+// ---- Stage: background, watch bezel, captions, timeline ---------------------
+
+const W = 1080, H = 1920;
+const WATCH_CX = 540, WATCH_CY = 1010, SCREEN_SCALE = 1.9;
+const SCREEN_R = 227 * SCREEN_SCALE;
+const stage = document.getElementById("stage");
+const ctx = stage.getContext("2d");
+const screen = document.createElement("canvas");
+screen.width = screen.height = 454;
+const sg = screen.getContext("2d");
+let bg, bezel, icon;
+
+function buildBackground(hero) {
+  // Cover the 9:16 frame (plus slack for a slow pan), blurred and darkened.
+  const c = document.createElement("canvas");
+  c.width = W + 240; c.height = H;
+  const g = c.getContext("2d");
+  const s = H / hero.height, w = hero.width * s;
+  g.filter = "blur(10px) brightness(0.42) saturate(1.2)";
+  g.drawImage(hero, (c.width - w) / 2, 0, w, H);
+  g.filter = "none";
+  const v = g.createRadialGradient(c.width / 2, H / 2, 300, c.width / 2, H / 2, 1200);
+  v.addColorStop(0, "rgba(10,4,16,0)");
+  v.addColorStop(1, "rgba(10,4,16,0.85)");
+  g.fillStyle = v;
+  g.fillRect(0, 0, c.width, H);
+  return c;
+}
+
+function buildBezel() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 1080;
+  const g = c.getContext("2d"), o = 540;
+  // Side buttons (fenix-style: 3 left, 2 right).
+  g.fillStyle = "#3a3a42";
+  for (const [x, y, w, h] of [[20, 360, 40, 70], [4, 505, 40, 70], [20, 650, 40, 70], [1020, 400, 40, 70], [1020, 610, 40, 70]]) {
+    g.beginPath(); g.roundRect(x, y, w, h, 10); g.fill();
+  }
+  const outer = g.createLinearGradient(0, 0, 1080, 1080);
+  outer.addColorStop(0, "#5c5c66"); outer.addColorStop(0.5, "#24242a"); outer.addColorStop(1, "#4a4a52");
+  g.fillStyle = outer;
+  g.beginPath(); g.arc(o, o, 500, 0, 2 * Math.PI); g.fill();
+  g.fillStyle = "#16161a";
+  g.beginPath(); g.arc(o, o, 470, 0, 2 * Math.PI); g.fill();
+  // Bezel ticks.
+  g.fillStyle = "#6c6c76";
+  for (let i = 0; i < 60; i++) {
+    const a = (i / 60) * 2 * Math.PI, len = i % 5 === 0 ? 16 : 7, r = 462;
+    g.save(); g.translate(o + Math.cos(a) * r, o + Math.sin(a) * r); g.rotate(a);
+    g.fillRect(-len, -1.5, len, 3); g.restore();
+  }
+  g.fillStyle = "#000";
+  g.beginPath(); g.arc(o, o, SCREEN_R + 4, 0, 2 * Math.PI); g.fill();
+  return c;
+}
+
+function captionScale(lines) {
+  return Math.max(...lines.map(l => textWidth(l, F.px30))) * 2 <= 980 ? 2 : 1.5;
+}
+
+function drawCaption(lines, t, palette, alpha) {
+  if (!lines || t < 0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const scale = captionScale(lines);
+  lines.forEach((line, i) => wave(ctx, line, F.px30, W / 2, 250 + i * 84, palette, t - i * 0.25, 0.035, 0, scale));
+  ctx.restore();
+}
+
+function drawWatch(drawScreen, screenFade) {
+  ctx.drawImage(bezel, WATCH_CX - 540, WATCH_CY - 540);
+  sg.fillStyle = "#000";
+  sg.fillRect(0, 0, 454, 454);
+  drawScreen(sg);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(WATCH_CX, WATCH_CY, SCREEN_R, 0, 2 * Math.PI); ctx.clip();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(screen, WATCH_CX - SCREEN_R, WATCH_CY - SCREEN_R, 2 * SCREEN_R, 2 * SCREEN_R);
+  if (screenFade > 0) { ctx.fillStyle = `rgba(0,0,0,${screenFade})`; ctx.fillRect(0, 0, W, H); }
+  // A faint glass highlight.
+  const gl = ctx.createLinearGradient(WATCH_CX - SCREEN_R, WATCH_CY - SCREEN_R, WATCH_CX, WATCH_CY);
+  gl.addColorStop(0, "rgba(255,255,255,0.07)"); gl.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gl;
+  ctx.fillRect(WATCH_CX - SCREEN_R, WATCH_CY - SCREEN_R, 2 * SCREEN_R, 2 * SCREEN_R);
+  ctx.restore();
+}
+
+// Timeline: [{start, dur, kind, ...}] built once the fonts are loaded.
+let segments = [], TOTAL = 0;
+
+function buildTimeline() {
+  segments = [];
+  let t = 0;
+  const add = (seg) => { seg.start = t; segments.push(seg); t += seg.dur; };
+  add({ kind: "hook", dur: HOOK.dur });
+  for (const a of ACHIEVEMENTS) { prepareAchievement(a); add({ kind: "ach", a, dur: a.animTotal / SPEED + 0.3 }); }
+  add({ kind: "hos", dur: HOS.perItem * HALL_OF_SHAME.length + 0.4 });
+  add({ kind: "cta", dur: CTA.dur });
+  TOTAL = t;
+}
+
+// Screen blinks off briefly between segments.
+const edgeFade = (lt, dur) => Math.max(clamp01(1 - lt / 0.18), clamp01(1 - (dur - lt) / 0.15));
+
+function renderFrame(time) {
+  const seg = segments.find(s => time < s.start + s.dur) || segments[segments.length - 1];
+  const lt = time - seg.start;
+
+  const pan = (time / TOTAL) * 240;
+  ctx.drawImage(bg, -pan, 0);
+  ctx.imageSmoothingEnabled = false;
+
+  if (seg.kind === "hook") {
+    drawCaption(HOOK.caption, lt - 0.1, CANDY, 1);
+    drawWatch(g => {
+      const a = lt * SPEED;
+      ring(g, 227, 227, 205, 8, 40, 0xCCCCCC, 0, a - 0.4);
+      wave(g, "THE SYSTEM", F.px30, 227, 150, CANDY, a - 0.9, 0.05, 0);
+      wave(g, "IS WATCHING", F.px30, 227, 196, CANDY, a - 1.4, 0.05, 0);
+      tierIcon(g, "cursed", 227, 262, a > 2.4 ? 6 : 0, tierColorPair("cursed"));
+    }, edgeFade(lt, seg.dur));
+  } else if (seg.kind === "ach") {
+    drawCaption(seg.a.caption, lt, seg.a.tier === "cursed" ? RED : forTier(seg.a.tier), 1);
+    drawWatch(g => drawAchievement(g, seg.a, Math.max(0, lt - 0.15) * SPEED), edgeFade(lt, seg.dur));
+  } else if (seg.kind === "hos") {
+    drawCaption(HOS.caption, lt, CANDY, 1);
+    const idx = Math.min(HALL_OF_SHAME.length - 1, Math.floor(Math.max(0, lt - 0.2) / HOS.perItem));
+    drawWatch(g => drawHallOfShame(g, idx), edgeFade(lt, seg.dur));
+  } else {
+    drawCta(lt);
+  }
+
+  // Brand mark at the bottom (hidden on the CTA, which has its own).
+  if (seg.kind !== "cta") {
+    ctx.globalAlpha = 0.75;
+    drawTextCentered(ctx, W / 2, 1700, F.px24, "WATCHCRAWLER", 0xFFE39E, 1);
+    drawTextCentered(ctx, W / 2, 1740, F.sk18, "for Garmin watches", 0xB4B4BE, 1);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawCta(lt) {
+  const s = Math.round(4 * outBack(clamp01(lt / 0.4)) * 100) / 100;
+  if (s > 0) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(icon, W / 2 - icon.width * s / 2, 500 - icon.height * s / 2, icon.width * s, icon.height * s);
+  }
+  wave(ctx, "WATCHCRAWLER", F.px38, W / 2, 730, GOLD, lt - 0.3, 0.05, 8, 2);
+  CTA.lines.forEach((line, i) => {
+    const t = lt - 1.0 - i * 0.18;
+    if (t < 0 || !line) return;
+    ctx.globalAlpha = clamp01(t / 0.3);
+    drawTextCentered(ctx, W / 2, 950 + i * 70, F.sk22, line, i < 2 ? 0xECECF2 : 0x9EE7FF, 2);
+    ctx.globalAlpha = 1;
+  });
+  typeText2x(CTA.url, 1400, lt - 2.0);
+  ring(ctx, W / 2, 960, 470, 12, 60, 0xFFD83D, 2, lt);
+}
+
+// typeText at 2x on the main canvas, for the CTA url.
+function typeText2x(text, y, t) {
+  if (t < 0) return;
+  const n = Math.min(Math.floor(t * 30), text.length);
+  const shown = text.substring(0, n) + (n < text.length || Math.floor(t * 3) % 2 === 0 ? "_" : "");
+  const scale = textWidth(text + "_", F.sk22) * 2 <= 1000 ? 2 : 1.5;
+  drawText(ctx, Math.round(W / 2 - textWidth(text + "_", F.sk22) * scale / 2), y, F.sk22, shown, 0xFFE39E, scale);
+}
+
+async function init() {
+  for (const n of ["px16", "px24", "px30", "px38", "px46", "px56", "sk18", "sk22"]) {
+    F[n] = await loadFont(n);
+  }
+  const load = async src => { const i = new Image(); i.src = src; await i.decode(); return i; };
+  bg = buildBackground(await load("../../docs/hero.jpg"));
+  icon = await load("../../watch/resources/drawables/launcher_icon.png");
+  bezel = buildBezel();
+  buildTimeline();
+  renderFrame(0);
+  window.TOTAL = TOTAL;
+  window.FPS = FPS;
+  window.ready = true;
+}
+
+window.renderFrame = renderFrame;
+if (new URLSearchParams(location.search).has("headless")) document.body.classList.add("headless");
+
+init().then(() => {
+  const scrub = document.getElementById("scrub"), clock = document.getElementById("clock"), play = document.getElementById("play");
+  scrub.max = TOTAL;
+  const show = t => { renderFrame(t); scrub.value = t; clock.textContent = t.toFixed(2) + "s / " + TOTAL.toFixed(1) + "s"; };
+  scrub.oninput = () => show(+scrub.value);
+  let playing = false, t0 = 0;
+  const tick = now => {
+    if (!playing) return;
+    const t = (now - t0) / 1000;
+    if (t >= TOTAL) { playing = false; play.textContent = "Play"; return; }
+    show(t); requestAnimationFrame(tick);
+  };
+  play.onclick = () => {
+    playing = !playing; play.textContent = playing ? "Pause" : "Play";
+    if (playing) { t0 = performance.now() - (+scrub.value >= TOTAL ? 0 : +scrub.value) * 1000; requestAnimationFrame(tick); }
+  };
+  show(0);
+});
+</script>
+</body>
+</html>

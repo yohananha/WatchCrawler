@@ -68,11 +68,29 @@ random_hex() {
 }
 
 # ---- error reports to the developer (only after the user agreed) -----------
-NTFY_URL="$(grep -o '"NtfyUrl": *"[^"]*"' "$ROOT/server/appsettings.json" 2>/dev/null | sed 's/.*"\(https[^"]*\)"/\1/' || true)"
 REPORTS=""        # "yes" once agreed
 CURRENT_STEP="start"
 API_KEY=""
 SHARED_KEY=""
+
+# The developer's report topic isn't in the code: CI bakes it into the published server image's
+# environment (Reporting__NtfyUrl, from a repository secret). Read it from the image config through
+# the public registry API - only when a report is actually being sent.
+report_url() {
+    local repo="yohananha/watchcrawler-server" token manifest digest
+    local accept="application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json"
+    token="$(curl -fsS -m 10 "https://ghcr.io/token?scope=repository:$repo:pull" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
+    [ -n "$token" ] || return 0
+    manifest="$(curl -fsS -m 10 -H "Authorization: Bearer $token" -H "Accept: $accept" "https://ghcr.io/v2/$repo/manifests/latest")"
+    if [[ "$manifest" == *'"manifests"'* ]]; then  # multi-platform index: follow the first image
+        digest="$(echo "$manifest" | grep -o '"digest": *"sha256:[0-9a-f]*"' | head -1 | grep -o 'sha256:[0-9a-f]*')"
+        manifest="$(curl -fsS -m 10 -H "Authorization: Bearer $token" -H "Accept: $accept" "https://ghcr.io/v2/$repo/manifests/$digest")"
+    fi
+    digest="$(echo "$manifest" | tr -d '\n ' | grep -o '"config":{[^}]*}' | grep -o 'sha256:[0-9a-f]*')"
+    [ -n "$digest" ] || return 0
+    curl -fsSL -m 10 -H "Authorization: Bearer $token" "https://ghcr.io/v2/$repo/blobs/$digest" \
+        | grep -o 'Reporting__NtfyUrl=https://[^"]*' | head -1 | cut -d= -f2-
+}
 
 scrub() {
     local s="$1"
@@ -87,10 +105,12 @@ on_error() {
     echo
     echo "${R}✗ Setup failed during: $CURRENT_STEP${N}"
     echo "  (command: $(scrub "$cmd"), exit $code)"
-    if [ "$REPORTS" = yes ] && [ -n "$NTFY_URL" ] && [ "$DRY_RUN" = 0 ]; then
+    local ntfy=""
+    if [ "$REPORTS" = yes ] && [ "$DRY_RUN" = 0 ]; then ntfy="$(report_url 2>/dev/null || true)"; fi
+    if [ -n "$ntfy" ]; then
         curl -s -m 10 -H "Title: WatchCrawler: setup failed" -H "Tags: hammer_and_wrench" \
             -d "$(scrub "step: $CURRENT_STEP | os: $(uname -s) | line $line: $cmd (exit $code)")" \
-            "$NTFY_URL" >/dev/null 2>&1 || true
+            "$ntfy" >/dev/null 2>&1 || true
         echo "  A short error report was sent to the WatchCrawler developer."
     fi
     echo "  Fix the problem above and run ./setup.sh again - it picks up where it can."

@@ -86,7 +86,9 @@ changes.
 
 ## Error reports
 
-`ErrorReporter` posts to `Reporting:NtfyUrl` in `appsettings.json`. It reports:
+`ErrorReporter` posts to the developer's ntfy topic (`Reporting:NtfyUrl`). The URL isn't in the code:
+CI bakes it into the published image from the `NTFY_URL` repository secret, and a server deployed
+from source gets it from a `Reporting__NtfyUrl` env var or secret. Without it, reports are off. It reports:
 
 - Unhandled exceptions.
 - LLM failures that fell back to canned text.

@@ -11,6 +11,10 @@ COPY --from=build /app .
 # Shown in error reports, so a report can be matched to the code that produced it (CI passes the git hash).
 ARG BUILD_STAMP=dev
 ENV BUILD_STAMP=$BUILD_STAMP
+# The developer's error-report topic, passed in by CI from a repository secret so it isn't in the code.
+# Empty (e.g. a local build) -> no reports.
+ARG REPORTING_NTFY_URL=""
+ENV Reporting__NtfyUrl=$REPORTING_NTFY_URL
 # State (install id, usage, report counters, joke history) lives here; mount a volume on it.
 ENV DATA_DIR=/data
 ENV HISTORY_STATE_PATH=/data/history.json
