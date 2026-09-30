@@ -60,7 +60,22 @@ class ActivityDetector {
             if (iterator == null) {
                 return null;
             }
-            return iterator.next();
+            // The iterator's order isn't guaranteed across firmware, so take the most
+            // recent start time among the first few entries instead of trusting next().
+            var best = null;
+            for (var i = 0; i < 10; i++) {
+                var a = iterator.next() as UserProfile.UserActivity?;
+                if (a == null) {
+                    break;
+                }
+                if (a.startTime != null && (best == null || a.startTime.value() > best.startTime.value())) {
+                    best = a;
+                }
+            }
+            if (best != null) {
+                Application.Storage.setValue("histNewest", best.startTime.value());
+            }
+            return best;
         } catch (ex) {
             System.println("[ACTDET] getUserActivityHistory failed: " + ex.getErrorMessage());
             return null;
@@ -81,7 +96,13 @@ class ActivityDetector {
         }
         var distance = distanceM == null ? 0 : distanceM;
         var durationSec = duration == null ? 0 : duration.value();
-        return buildCoreFor(info[0], info[1], distance, durationSec);
+        var core = buildCoreFor(info[0], info[1], distance, durationSec);
+        // A profile name the pixel font/prompt can't use as-is (e.g. Hebrew "ריצה"): hand it to
+        // the LLM anyway so it can translate it for the commentary.
+        if (cap != null && (cap["name"] as String).length() > 0) {
+            (core["details"] as Dictionary).put("profileName", cap["name"]);
+        }
+        return core;
     }
 
     static function buildCoreFor(hero as String, sportDesc as String, distance as Number, durationSec as Number) as Dictionary {

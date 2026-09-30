@@ -1,7 +1,9 @@
+import Toybox.Application;
 import Toybox.Attention;
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.System;
+import Toybox.Time;
 import Toybox.UserProfile;
 import Toybox.WatchUi;
 
@@ -109,10 +111,20 @@ class DiagnosticView extends WatchUi.View {
         lines.add(BgStatus.summary());
         lines.add(BgStatus.triggerSummary());
         lines.add(ProfileCapture.summary());
+        lines.add(historySummary());
         lines.add("MENU=inject SELECT=view/back");
         lines.add(Diag.status);
 
         return lines;
+    }
+
+    // Newest history entry the background saw vs the last one already announced, as minutes ago.
+    private function historySummary() as String {
+        var newest = Application.Storage.getValue("histNewest");
+        var seen = Application.Storage.getValue("lastSeenActivityStart");
+        var now = Time.now().value();
+        return "hist: newest " + (newest instanceof Number ? ((now - newest) / 60) + "m" : "-")
+            + " announced " + (seen instanceof Number ? ((now - seen) / 60) + "m" : "-") + " ago";
     }
 
     private function yn(b as Boolean) as String {
