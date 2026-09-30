@@ -133,7 +133,8 @@ class DiagnosticView extends WatchUi.View {
         var seen = Application.Storage.getValue("lastSeenActivityStart");
         var now = Time.now().value();
         return "hist: newest " + (newest instanceof Number ? ((now - newest) / 60) + "m" : "-")
-            + " announced " + (seen instanceof Number ? ((now - seen) / 60) + "m" : "-") + " ago";
+            + " announced " + (seen instanceof Number ? ((now - seen) / 60) + "m" : "-") + " ago"
+            + " (scanned " + Application.Storage.getValue("histScanned") + ")";
     }
 
     private function yn(b as Boolean) as String {

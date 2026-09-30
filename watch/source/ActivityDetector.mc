@@ -60,18 +60,34 @@ class ActivityDetector {
             if (iterator == null) {
                 return null;
             }
-            // The iterator's order isn't guaranteed across firmware, so take the most
-            // recent start time among the first few entries instead of trusting next().
+            // The iterator's order isn't guaranteed: on the fenix 8 it evidently runs oldest
+            // first (the first 10 entries were ~14 months old). So keep the newest start time
+            // seen, and stop early only once the list is clearly newest-first (3 descending in
+            // a row); an ascending list is read to the end (capped).
             var best = null;
-            for (var i = 0; i < 10; i++) {
+            var prev = 0;
+            var descending = 0;
+            var scanned = 0;
+            for (var i = 0; i < 1000; i++) {
                 var a = iterator.next() as UserProfile.UserActivity?;
                 if (a == null) {
                     break;
                 }
-                if (a.startTime != null && (best == null || a.startTime.value() > best.startTime.value())) {
+                scanned += 1;
+                if (a.startTime == null) {
+                    continue;
+                }
+                var t = a.startTime.value();
+                if (best == null || t > best.startTime.value()) {
                     best = a;
                 }
+                descending = (t < prev) ? descending + 1 : 0;
+                prev = t;
+                if (descending >= 3) {
+                    break;
+                }
             }
+            Application.Storage.setValue("histScanned", scanned);
             if (best != null) {
                 Application.Storage.setValue("histNewest", best.startTime.value());
             }
