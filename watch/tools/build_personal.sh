@@ -58,10 +58,14 @@ t = t.replace('<string id="CfgSharedKey"></string>', '<string id="CfgSharedKey">
 open(path, "w", encoding="utf-8").write(t)
 PYEOF
 
+# Shown on the diagnostics screen: git hash (+ if uncommitted changes) and build time.
+BUILD_STAMP="$(git -C "$WATCH_DIR" rev-parse --short HEAD 2>/dev/null || echo nogit)$(git -C "$WATCH_DIR" diff --quiet 2>/dev/null || echo '+')-$(date +%m%d-%H%M)"
+sed -i "s/STAMP = \"dev\"/STAMP = \"$BUILD_STAMP\"/" "$BUILD_DIR/source/BuildInfo.mc"
+
 mkdir -p "$BUILD_DIR/bin"
 cd "$BUILD_DIR"
 monkeyc -f monkey.jungle -d "$DEVICE" -o bin/achievements.prg -y keys/developer_key.der -w
 
 echo
-echo "Built: $BUILD_DIR/bin/achievements.prg"
+echo "Built: $BUILD_DIR/bin/achievements.prg (build $BUILD_STAMP)"
 echo "Copy that to GARMIN/Apps/achievements.prg on your watch."

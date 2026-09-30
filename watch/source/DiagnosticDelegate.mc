@@ -1,3 +1,4 @@
+import Toybox.Application;
 import Toybox.Lang;
 import Toybox.System;
 import Toybox.WatchUi;
@@ -26,6 +27,15 @@ class DiagnosticDelegate extends WatchUi.BehaviorDelegate {
 
     function onMenu() as Boolean {
         return injectFakeAchievement();
+    }
+
+    // DOWN: forget which activity was last announced, so the next background tick
+    // (<= 5 min) announces the newest one in the watch history again.
+    function onNextPage() as Boolean {
+        Application.Storage.setValue("lastSeenActivityStart", 0);
+        Diag.status = "reset: newest activity re-announces on next tick";
+        WatchUi.requestUpdate();
+        return true;
     }
 
     function onTap(evt as WatchUi.ClickEvent) as Boolean {
