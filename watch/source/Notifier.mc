@@ -8,8 +8,8 @@ import Toybox.System;
 // Instinct 3, Venu 3/4/X1, vivoactive 5/6 - see the plan). Falls back to the
 // old-style "open app?" wake prompt everywhere else.
 //
-// registerForNotificationMessages() is registered once from AchievementApp
-// (Phase 1) so tapping the "Claim reward" action opens the app.
+// Tapping the "Claim reward" action launches the app, which opens directly on
+// the pending achievement (AchievementApp.getInitialView pops PendingQueue).
 //
 // Every path returns a short status string instead of failing silently, so
 // Phase 0 can show on-screen what actually happened (see DiagnosticDelegate).
@@ -41,9 +41,15 @@ class Notifier {
             // that have it, and Monkey C only lets us reference it inside
             // this guard.
             var Notifications = Toybox.Notifications;
+            // Actions MUST carry :data (not :id) and the notification needs a
+            // top-level :data - without them the system treats it as an
+            // actionless notification and only offers Back. Selecting the
+            // action launches the app, and getInitialView() then shows the
+            // pending achievement straight away.
             var options = {
                 :body => body,
-                :actions => [{ :id => "claim", :label => "Claim reward" }],
+                :data => "achievement",
+                :actions => [{ :label => "Claim reward", :data => "claim" }],
             };
             Notifications.showNotification(title, subtitle, options);
             return "showNotification() called OK";
