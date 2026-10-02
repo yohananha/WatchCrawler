@@ -39,8 +39,14 @@ class DiagnosticDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
+    // UP: flip the two diagnostics pages, then the Unlock screen (what the user build shows on MENU).
     function onPreviousPage() as Boolean {
-        DiagnosticView.page = 1 - DiagnosticView.page;
+        if (DiagnosticView.page == 1) {
+            DiagnosticView.page = 0;
+            WatchUi.pushView(new UnlockView(), new UnlockDelegate(), WatchUi.SLIDE_LEFT);
+            return true;
+        }
+        DiagnosticView.page = 1;
         WatchUi.requestUpdate();
         return true;
     }

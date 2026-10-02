@@ -19,6 +19,11 @@
 #   --dev   developer build: keeps the diagnostics screen (MENU), the fake
 #           achievement injector, remote test trigger polling and the settings
 #           entries (see dev.jungle). Without it you get the user build.
+#   --store store package: a release user build for EVERY device in the
+#           manifest, as watch/.personal-build/bin/WatchCrawler.iq - what you
+#           upload to the Connect IQ Store. No device id needed. Bake in the
+#           hosted server's public URL and shared key (see server/README.md,
+#           "Hosted mode").
 #
 # Output: watch/.personal-build/bin/WatchCrawler.prg - copy that to
 # GARMIN/Apps on your watch.
@@ -26,17 +31,22 @@
 set -euo pipefail
 
 DEV=0
-if [ "${1:-}" = "--dev" ]; then
-    DEV=1
-    shift
-fi
+STORE=0
+case "${1:-}" in
+    --dev) DEV=1; shift ;;
+    --store) STORE=1; shift ;;
+esac
 
 if [ -z "${WATCHCRAWLER_SERVER_URL:-}" ] || [ -z "${WATCHCRAWLER_SHARED_KEY:-}" ]; then
     echo "Set WATCHCRAWLER_SERVER_URL and WATCHCRAWLER_SHARED_KEY first (setup.sh does this for you)." >&2
     exit 1
 fi
 
-DEVICE="${1:?Usage: build_personal.sh [--dev] <device-id>, e.g. fenix7}"
+DEVICE="${1:-}"
+if [ "$STORE" = 0 ] && [ -z "$DEVICE" ]; then
+    echo "Usage: build_personal.sh [--dev] <device-id> (e.g. fenix7), or build_personal.sh --store" >&2
+    exit 1
+fi
 WATCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$WATCH_DIR/.personal-build"
 
@@ -140,6 +150,14 @@ JUNGLE="monkey.jungle"
 
 mkdir -p "$BUILD_DIR/bin"
 cd "$BUILD_DIR"
+if [ "$STORE" = 1 ]; then
+    # -e packages every manifest device into one .iq; -r strips (:debug) code (the simulator self-test).
+    "$MONKEYC" -f "$JUNGLE" -e -r -o bin/WatchCrawler.iq -y keys/developer_key.der -w
+    echo
+    echo "Built: $BUILD_DIR/bin/WatchCrawler.iq (build $BUILD_STAMP, store package)"
+    echo "Upload it at https://apps.garmin.com/developer/upload - every later upload must be signed with the same key."
+    exit 0
+fi
 "$MONKEYC" -f "$JUNGLE" -d "$DEVICE" -o bin/WatchCrawler.prg -y keys/developer_key.der -w
 
 echo

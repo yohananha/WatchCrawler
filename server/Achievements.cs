@@ -210,11 +210,17 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
         new("Technical Difficulties", "The announcer is on a break. Please imagine something cutting.", "Reward: use your imagination.")
     ];
 
-    public async Task<GenerationResult> GenerateAsync(GameEvent e, ILlmProvider provider, bool recordHistory, CancellationToken ct)
+    /// <summary>Single-user mode: the shared <see cref="RecentHistory"/> is the "do not repeat" list.</summary>
+    public Task<GenerationResult> GenerateAsync(GameEvent e, ILlmProvider provider, bool recordHistory, CancellationToken ct) =>
+        GenerateAsync(e, provider, recordHistory ? history.Snapshot() : [], recordHistory ? history.Add : null, ct);
+
+    /// <summary>Hosted mode passes each watch's own recent list and a callback that stores the new line for it.</summary>
+    public async Task<GenerationResult> GenerateAsync(GameEvent e, ILlmProvider provider, IReadOnlyList<AchievementText> recent,
+        Action<AchievementText>? record, CancellationToken ct)
     {
         var (tier, z) = TierCalculator.Compute(e);
         var system = PromptBuilder.System(settings);
-        var user = PromptBuilder.User(e, tier, z, recordHistory ? history.Snapshot() : []);
+        var user = PromptBuilder.User(e, tier, z, recent);
 
         int inTok = 0, outTok = 0, attempts = 0;
         var latency = TimeSpan.Zero;
@@ -266,7 +272,7 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
 
         GenerationResult Done(AchievementText t, bool isFallback, string? err)
         {
-            if (recordHistory && !isFallback) history.Add(t);
+            if (!isFallback) record?.Invoke(t);
 
             var achievement = new Achievement(
                 t.Title, t.Text, t.Reward,

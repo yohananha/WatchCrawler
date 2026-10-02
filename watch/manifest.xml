@@ -1,5 +1,5 @@
 <iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
-    <iq:application id="a1b2c3d4-0000-4000-8000-000000000001" type="watch-app" name="@Strings.AppName"
+    <iq:application id="fe09eb7c-4471-4d93-a283-fb1666d17c0e" type="watch-app" name="@Strings.AppName"
         entry="AchievementApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="5.0.0">
 
         <iq:products>

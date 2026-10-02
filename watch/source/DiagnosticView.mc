@@ -122,7 +122,7 @@ class DiagnosticView extends WatchUi.View {
             + " ActMon:" + yn(hasSymbol(:ActivityMonitor)) + " Hist:" + yn(Toybox.UserProfile has :getUserActivityHistory)
             + " Comm:" + yn(hasSymbol(:Communications)) + " Tone:" + yn(Toybox.Attention has :playTone));
         lines.add(BgStatus.triggerSummary());
-        lines.add("MENU=inject SELECT=view/back UP=back");
+        lines.add("MENU=inject SELECT=view/back UP=unlock screen");
         lines.add(Diag.status);
 
         return lines;

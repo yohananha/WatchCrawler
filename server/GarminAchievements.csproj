@@ -11,6 +11,11 @@
     <None Update="sample-events.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Hosted mode keeps devices, licences, coupons and orders in one SQLite file (Hosted.cs). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
   <!-- Tests/ has its own .csproj; without this, the implicit **/*.cs glob
        here also picks up the test files (which reference xunit, not
        referenced by this project) and fails the build. -->

@@ -5,11 +5,21 @@ and returns a sarcastic achievement written by an LLM. Each user runs their own 
 API key: `../setup.sh` deploys it to Fly.io from the prebuilt image
 `ghcr.io/yohananha/watchcrawler-server`. It also has a blind-comparison mode for picking an LLM.
 
+It also has a **hosted mode** (`HOSTED=true`): one server for every user of the Connect IQ Store
+version, the developer's API key, a free trial per watch and a one-time PayPal/coupon unlock. See
+[Hosted mode](#hosted-mode) below and [`../docs/distribution.md`](../docs/distribution.md) for the
+business side.
+
 ## Files
 
 | File | Role |
 |---|---|
-| `Program.cs` | API endpoints, shared-key auth, startup checks, compare mode |
+| `Program.cs` | API endpoints, shared-key auth, startup checks, compare mode, hosted-mode unlock/admin endpoints |
+| `Hosted.cs` | Hosted mode: settings, trial/licence rules (`Licensing`), the SQLite store of devices, per-device history, coupons, orders |
+| `LemonSqueezy.cs` | Lemon Squeezy checkout link + signed order webhook (the recommended payment provider) |
+| `PayPal.cs` | PayPal Checkout REST: create and capture an order (alternative) |
+| `UnlockPage.cs` | The `/unlock` page (code + coupon + PayPal button) |
+| `CouponCli.cs` | `dotnet GarminAchievements.dll coupon add|list|del` |
 | `StartupConfig.cs` | `LLM_PROVIDER` mapping; refuses to start without an API key or `WATCH_SHARED_KEY` |
 | `Models.cs` | Event, achievement, settings |
 | `Providers.cs` | `ILlmProvider`: Anthropic plus OpenAI-compatible (DeepSeek, OpenRouter); structured HTTP errors (out of credit, bad key) |
@@ -107,6 +117,68 @@ goes out with ntfy's `Email` header to `Reporting:DigestEmail`. The server sleep
 digest is sent on the first request after 24 hours rather than from a timer. State is kept in
 `DATA_DIR`.
 
+## Hosted mode
+
+`HOSTED=true` turns the single-user server into the store version's shared server:
+
+- Every watch call (`/achievement`, `/day-settings`) must carry **`X-Device-Id`** (the watch's
+  `uniqueIdentifier`; see `watch/source/Config.mc`). First contact creates the device and starts its
+  **trial** (`HOSTED_TRIAL_DAYS`, 7). Each device gets a 6-character **unlock code** (no 0/O/1/I).
+- The LLM is called only while the device is on trial or **licensed**, under **`HOSTED_AI_PER_DAY`**
+  (6) AI achievements that day, and while the month's spend is under **`HOSTED_MONTHLY_BUDGET_USD`**
+  and the API account has credit. Otherwise `/achievement` answers `{ "local": true, "reason": ... }`
+  and the watch writes the line from its own bank. A failed LLM call answers the same and does not
+  count against the day. `history` is kept **per device** in SQLite (not `history.json`).
+- Every answer also carries `license` (`state`, `code`, `url`, `daysLeft`, `licensedUntil`) and, when
+  due, a `notice`: *Trial Mana Fading* (last `TrialWarnDays` of the trial) or *Out of Mana* (trial
+  over / licence expired) with the unlock URL and code.
+- **Unlock:** `GET /unlock` is the page; it calls `GET /unlock/price?code&coupon`, then one of:
+  - **Lemon Squeezy** (recommended; merchant of record, so they collect tax, handle refunds and pay you
+    out; no business account needed): the page links to your product's checkout with the watch code
+    as `checkout[custom][code]`. Their `order_created` webhook, signed with the webhook secret, hits
+    `POST /webhook/lemonsqueezy`; a `paid` order licenses the device whose code is in the custom
+    data. A paid order with an unknown code is reported so you can license it by hand.
+  - **PayPal** (alternative): `POST /unlock/order` + `POST /unlock/capture`; the server creates the
+    order at the server's price and verifies the captured amount and status before licensing.
+  - `POST /unlock/redeem` for a 100% coupon (no payment provider involved).
+
+  Licensing adds `HOSTED_LICENSE_YEARS` (3) from the later of now and the current expiry, and is
+  idempotent per order id.
+- **Coupons:** percent off (1-100), max uses, optional expiry. A use is counted only when the order is
+  fulfilled. Create them with `fly ssh console -C "dotnet GarminAchievements.dll coupon add FRIEND 100 --uses 1 --note Dana"`
+  (`coupon list`, `coupon del CODE`) or `POST /admin/coupons {code, percentOff, maxUses, expiresInDays, note}`.
+  With Lemon Squeezy, our coupons are for **free (100%)** unlocks; a partial discount is one of
+  *their* discount codes (made in their dashboard), which the page passes through to the checkout.
+- **Admin** (`X-Admin-Key: $ADMIN_KEY`): `GET /admin/stats` (devices by state, sales, spend, top
+  spenders, plus the usage snapshot; `/usage` is admin-only when hosted), `GET/POST /admin/coupons`,
+  `DELETE /admin/coupons/{code}`, `GET /admin/devices/{code}`, `POST /admin/license {code, years}` /
+  `{code, revoke:true}` (refund) / `{code, transferOrderId}` (new watch), `DELETE /admin/devices/{code}`
+  (forget everything about a device).
+- **Reports:** every sale, free unlock, PayPal mismatch and "budget exhausted" goes to the developer's
+  ntfy topic; the daily digest carries the user/sales/spend numbers even on a quiet day.
+- The shared key is baked into a public build, so it is no longer a secret; the per-device rules are
+  what limit spend. `WATCH_SHARED_KEY` is still required (keeps casual scripts out).
+
+Settings: `HOSTED_UNLOCK_URL` (required, shown on the watch), `ADMIN_KEY` (required), `DATA_DIR`
+(required: the database is `DATA_DIR/licenses.db`), one payment provider: `LEMONSQUEEZY_CHECKOUT_URL`
++ `LEMONSQUEEZY_WEBHOOK_SECRET`, or `PAYPAL_CLIENT_ID` + `PAYPAL_CLIENT_SECRET` (+ `PAYPAL_ENV=sandbox|live`),
+or neither (coupons only). `HOSTED_PRICE_USD` (keep it equal to the product price in the provider),
+`HOSTED_TRIAL_DAYS`, `HOSTED_LICENSE_YEARS`, `HOSTED_AI_PER_DAY`, `HOSTED_MONTHLY_BUDGET_USD`.
+Deploy with [`fly.hosted.toml`](fly.hosted.toml) (always-on machine, volume). Back up
+`/data/licenses.db` (Fly's daily volume snapshots are the minimum).
+
+Local try-out, no PayPal:
+
+```bash
+export HOSTED=true HOSTED_UNLOCK_URL=localhost:5080/unlock ADMIN_KEY=adm DATA_DIR=./data \
+       ANTHROPIC_API_KEY=sk-ant-... ALLOW_NO_WATCH_KEY=true REPORT_ERRORS=false HOSTED_TRIAL_DAYS=0
+dotnet run
+curl -X POST localhost:5080/achievement -H "Content-Type: application/json" -H "X-Device-Id: test-1" \
+  -d '{"type":"steps_goal"}'          # -> {"local":true,"reason":"expired","notice":{...},"license":{"code":"..."}}
+dotnet run -- coupon add FRIEND 100 --uses 1
+curl -X POST localhost:5080/unlock/redeem -H "Content-Type: application/json" -d '{"code":"<code>","coupon":"FRIEND"}'
+```
+
 ## Running locally
 
 ```bash
@@ -156,4 +228,5 @@ publishes the image to GHCR.
   - It doesn't retry when the account is out of credit or the key is bad.
 - **The last 10 achievements** go into the prompt to avoid repeats. They're kept as a JSON file on
   the volume.
-- **One server per user**, so files are enough and there's no database.
+- **One server per user** in self-hosted mode, so files are enough and there's no database. Hosted
+  mode (many watches) keeps its state in one SQLite file instead.

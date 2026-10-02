@@ -1,0 +1,53 @@
+# Fly.io config for the HOSTED server: one server for every store user, the developer's API key,
+# trial + paid unlock (see ../docs/distribution.md and README.md "Hosted mode").
+#   fly launch --no-deploy --copy-config --config fly.hosted.toml --name watchcrawler
+#   fly volumes create wc_data --size 1 --region iad
+#   fly secrets set HOSTED=true ANTHROPIC_API_KEY=... WATCH_SHARED_KEY=... ADMIN_KEY=... \
+#       LEMONSQUEEZY_CHECKOUT_URL=https://<store>.lemonsqueezy.com/checkout/buy/<id> LEMONSQUEEZY_WEBHOOK_SECRET=...
+#   (or PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET / PAYPAL_ENV=live instead of the Lemon Squeezy pair)
+#   fly deploy --config fly.hosted.toml --image ghcr.io/yohananha/watchcrawler-server:latest
+# WATCH_SHARED_KEY is baked into the public store build, so treat it as public; ADMIN_KEY is not.
+
+app = "watchcrawler"
+primary_region = "iad"
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Always on: a cold start would eat into the watch's background time budget, and the unlock
+  # page should open instantly. ~$2-3/month for the smallest machine.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[env]
+  PORT = "8080"
+  HOSTED = "true"
+  # Shown on the watch ("restore it at <this>, code ..."): keep it short.
+  HOSTED_UNLOCK_URL = "watchcrawler.fly.dev/unlock"
+  HOSTED_PRICE_USD = "7.99"
+  HOSTED_TRIAL_DAYS = "7"
+  HOSTED_LICENSE_YEARS = "3"
+  HOSTED_AI_PER_DAY = "6"
+  # Safety valve: past this month's LLM spend every watch gets built-in lines (and you get a report).
+  HOSTED_MONTHLY_BUDGET_USD = "150"
+  ENABLE_TEST_TRIGGER = "false"
+  DATA_DIR = "/data"
+  TRIGGER_STATE_PATH = "/data/trigger.flag"
+  HISTORY_STATE_PATH = "/data/history.json"
+  DAY_QUIET_FROM = "23"
+  DAY_QUIET_TO = "7"
+  DAY_MAX_PER_DAY = "10"
+  DAY_IDLE_HOUR = "22"
+  DAY_GOAL_HOUR = "21"
+
+[mounts]
+  source = "wc_data"
+  destination = "/data"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

@@ -75,7 +75,7 @@ class AchievementResolver {
             }
         }
 
-        var headers = { "Content-Type" => Communications.REQUEST_CONTENT_TYPE_JSON };
+        var headers = { "Content-Type" => Communications.REQUEST_CONTENT_TYPE_JSON, "X-Device-Id" => Config.deviceId() };
         var key = Config.sharedKey();
         if (key != null) {
             headers.put("X-Watch-Key", key as String);
@@ -106,6 +106,13 @@ class AchievementResolver {
             WatchErr.clear();
             SystemNotice.store(data as Dictionary);
             finishWithServerText(data as Dictionary);
+        } else if (responseCode == 200 && data instanceof Dictionary && data["local"] == true) {
+            // Hosted server, no AI for this watch right now (trial over, daily cap,
+            // LLM down): not an error - write the line ourselves, keep the notice.
+            System.println("[SRV] server says use local text: " + data["reason"]);
+            WatchErr.clear();
+            SystemNotice.store(data as Dictionary);
+            finishWithFallback();
         } else {
             System.println("[SRV] request failed, code=" + responseCode);
             WatchErr.record("achievement", responseCode);

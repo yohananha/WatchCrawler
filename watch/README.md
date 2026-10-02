@@ -44,7 +44,7 @@ There are two build flavours:
 
 | Build | Jungle | What's in it |
 |---|---|---|
-| **User** (default, what setup makes) | `monkey.jungle` | Everything except `(:dev)` code. MENU does nothing, there's no settings entry, no test-trigger polling. Server settings and credit notices are polled every 3 h via `GET /day-settings`. |
+| **User** (default, what setup makes) | `monkey.jungle` | Everything except `(:dev)` code. MENU opens the Unlock screen, there's no settings entry, no test-trigger polling. Server settings and notices are polled every 3 h via `GET /day-settings`. |
 | **Developer** | `"monkey.jungle;dev.jungle"` | Adds the diagnostics screen (MENU), the fake-achievement injector, remote test-trigger polling every cycle, and the settings entries in `resources-dev/`. Drops the `(:user)` stand-ins. |
 
 ```bash
@@ -94,12 +94,30 @@ a sideloaded watch:
 Empty `serverUrl` means fully offline: local `TextBank` only, no network calls, and the Hall of
 Shame shows "NOT SET UP: RUN SETUP".
 
+## Store (hosted) build
+
+The Connect IQ Store version talks to one shared server (`../server/README.md`, "Hosted mode") with
+its public URL and shared key baked in the same way, so the user installs it and that's it:
+
+- Every request carries `X-Device-Id` (`Config.deviceId()`: the watch's `uniqueIdentifier`, or a
+  generated one kept in Storage). The server keys the trial, the licence and the "do not repeat"
+  history on it.
+- A `200` answer with `"local": true` (trial over, daily AI cap, LLM down) is not an error: the
+  watch writes the line from `TextBank` and keeps the `notice`/`license` the answer carried.
+- **MENU** in a user build opens the **Unlock screen** (`UnlockView.mc`): trial / unlocked-until /
+  out of mana, the unlock code and the page to type it into. Developer builds reach the same screen
+  with UP from the second diagnostics page.
+- Package for the store with `tools/build_personal.sh --store` (release build of every device in the
+  manifest → `.personal-build/bin/WatchCrawler.iq`). Garmin ties updates to the signing key, so keep
+  `keys/developer_key.der`.
+
 ## Credit notices and error reports
 
-- **Credit notices:** every server answer carries `notice`, a "Mana Reserves Low" / "Out of Mana"
-  message when the user's API credit is low or empty. `SystemNotice.mc` keeps the latest one. The
-  background service shows it as a "SYSTEM MESSAGE" at most once a day, outside quiet hours, on a
-  tick with nothing else to announce.
+- **System notices:** every server answer carries `notice`: on a personal server "Mana Reserves
+  Low" / "Out of Mana" about the user's own API credit; on a hosted server "Trial Mana Fading" /
+  "Out of Mana" about the trial or licence. `SystemNotice.mc` keeps the latest one (and the
+  `license` info). The background service shows it as a "SYSTEM MESSAGE" at most once a day,
+  outside quiet hours, on a tick with nothing else to announce.
 - **Error reports:** `WatchErr.mc` remembers the last failed request (response code, where, how
   many times, build stamp). It sends that as `X-Watch-Error` on the next request that gets through,
   and the server forwards it to the developer's reports. Phone-not-connected codes (-104, -2) are

@@ -103,6 +103,9 @@ public sealed class UsageTracker
         }
     }
 
+    /// <summary>Hosted mode: the global "stop calling the API" switch is the provider saying the account is empty.</summary>
+    public bool IsOutOfCredit { get { lock (_lock) return _state.OutOfCredit; } }
+
     /// <summary>The API said the account has no credit left.</summary>
     public void MarkOutOfCredit()
     {

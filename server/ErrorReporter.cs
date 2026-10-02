@@ -145,6 +145,9 @@ public sealed class ErrorReporter
         return sent;
     }
 
+    /// <summary>Hosted mode appends its numbers (users, sales, spend) to every digest, so a quiet day still reports.</summary>
+    public Func<string>? ExtraDigest { get; set; }
+
     /// <summary>Sends the daily digest if one is due. Called opportunistically (on reports and requests)
     /// rather than from a timer, since Fly machines sleep most of the day.</summary>
     public async Task MaybeSendDigestAsync()
@@ -154,7 +157,7 @@ public sealed class ErrorReporter
         Dictionary<string, int> counts;
         lock (_lock)
         {
-            if (_state.Counts.Count == 0) return;
+            if (_state.Counts.Count == 0 && ExtraDigest is null) return;
             if (_state.LastDigest == default) { _state.LastDigest = now; DataDir.Save(_statePath, _state); return; }
             if (now - _state.LastDigest < DigestEvery) return;
             counts = new Dictionary<string, int>(_state.Counts);
@@ -163,8 +166,11 @@ public sealed class ErrorReporter
             DataDir.Save(_statePath, _state);
         }
 
-        var lines = string.Join("\n", counts.OrderByDescending(c => c.Value).Select(c => $"- {c.Key}: {c.Value}x"));
-        await PostAsync("WatchCrawler daily digest", $"{Header()}\nLast 24h:\n{lines}", 2, "calendar",
+        var lines = counts.Count == 0 ? "- nothing" : string.Join("\n", counts.OrderByDescending(c => c.Value).Select(c => $"- {c.Key}: {c.Value}x"));
+        var extra = "";
+        try { extra = ExtraDigest?.Invoke() is { Length: > 0 } x ? "\n" + x : ""; }
+        catch (Exception ex) { extra = $"\n(stats failed: {ex.Message})"; }
+        await PostAsync("WatchCrawler daily digest", $"{Header()}\nLast 24h:\n{lines}{extra}", 2, "calendar",
             email: string.IsNullOrWhiteSpace(_settings.DigestEmail) ? null : _settings.DigestEmail);
     }
 

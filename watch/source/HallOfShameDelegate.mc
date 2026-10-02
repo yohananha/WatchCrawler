@@ -36,8 +36,10 @@ class HallOfShameDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
+    // User builds: MENU shows the licence state and unlock code (hosted server).
     (:user)
     function onMenu() as Boolean {
-        return false;
+        WatchUi.pushView(new UnlockView(), new UnlockDelegate(), WatchUi.SLIDE_LEFT);
+        return true;
     }
 }

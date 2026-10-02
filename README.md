@@ -118,6 +118,11 @@ if it works (or doesn't).
 | `setup.sh`, `setup.cmd`, `install.sh` | The user installer |
 | `docker-compose.yml` | Run the server locally instead of on Fly.io |
 
+**Store version:** the same code also runs as one shared, developer-paid server with a free trial and
+a one-time PayPal/coupon unlock (`HOSTED=true`). The numbers behind it (cost per user, price) and the
+go-live checklist are in [`docs/distribution.md`](docs/distribution.md); the mechanics in the
+server and watch READMEs.
+
 **Developer builds** of the watch app keep the diagnostics screen (MENU), the fake-achievement
 injector, remote test-trigger polling and the settings entries:
 `watch/tools/build_personal.sh --dev <device>`. User builds (the default, and what setup makes)

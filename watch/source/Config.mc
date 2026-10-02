@@ -1,5 +1,8 @@
 import Toybox.Application;
 import Toybox.Lang;
+import Toybox.Math;
+import Toybox.System;
+import Toybox.Time;
 
 // serverUrl/sharedKey. Application.Properties is the source of truth, but
 // it is not reliably readable from the background process: on a real watch
@@ -27,6 +30,28 @@ class Config {
         mirror("serverUrl", STORE_URL);
         mirror("sharedKey", STORE_KEY);
     }
+
+    // Sent as X-Device-Id on every request. A hosted server (one server for
+    // everyone) keys the trial/licence and the "do not repeat" history on it;
+    // a personal server ignores it. The watch's own id when it has one, else a
+    // random id made once and kept in Storage (older simulators return null).
+    static function deviceId() as String {
+        try {
+            var id = System.getDeviceSettings().uniqueIdentifier;
+            if (id instanceof String && (id as String).length() > 0) {
+                return id as String;
+            }
+        } catch (ex) {
+        }
+        var saved = Application.Storage.getValue(STORE_DEVICE_ID);
+        if (saved instanceof String) {
+            return saved as String;
+        }
+        var made = "gen-" + Time.now().value().toString() + "-" + Math.rand().toString();
+        Application.Storage.setValue(STORE_DEVICE_ID, made);
+        return made;
+    }
+    private static const STORE_DEVICE_ID = "cfgDeviceId";
 
     // For diagnostics: which sources have a value, without revealing it.
     static function describe() as String {

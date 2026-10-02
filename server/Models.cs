@@ -38,7 +38,13 @@ public sealed record Achievement(
 {
     /// <summary>Low/out-of-credit warning for the watch to show once a day (null when credit is fine).</summary>
     public CreditNotice? Notice { get; init; }
+    /// <summary>Hosted mode only: the watch's trial/licence state and unlock code.</summary>
+    public LicenseInfo? License { get; init; }
 }
+
+/// <summary>Hosted mode's answer when the LLM is not called for this watch (trial over, daily cap, budget): no
+/// title, so the watch writes the line itself from its built-in bank, but it still gets the notice and licence.</summary>
+public sealed record LocalReply(bool Local, string Reason, CreditNotice? Notice, LicenseInfo? License);
 
 /// <summary>A "System" message about the API credit, shaped like an achievement so the watch can reuse its view.</summary>
 public sealed record CreditNotice(string State, string Title, string Text, string Reward);

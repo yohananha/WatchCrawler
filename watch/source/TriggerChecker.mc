@@ -50,7 +50,7 @@ class TriggerChecker {
             return;
         }
 
-        var headers = {};
+        var headers = { "X-Device-Id" => Config.deviceId() };
         var key = Config.sharedKey();
         if (key != null) {
             headers.put("X-Watch-Key", key as String);
