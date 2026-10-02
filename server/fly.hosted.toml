@@ -1,7 +1,7 @@
 # Fly.io config for the HOSTED server: one server for every store user, the developer's API key,
 # trial + paid unlock (see ../docs/distribution.md and README.md "Hosted mode").
 #   fly launch --no-deploy --copy-config --config fly.hosted.toml --name watchcrawler
-#   fly volumes create wc_data --size 1 --region iad
+#   fly volumes create trigger_data --size 1 --region iad   (skip if the app already has it)
 #   fly secrets set HOSTED=true ANTHROPIC_API_KEY=... WATCH_SHARED_KEY=... ADMIN_KEY=... \
 #       LEMONSQUEEZY_WEBHOOK_SECRET=...   (the checkout URL is public and sits in [env] below)
 #   (or PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET / PAYPAL_ENV=live instead of the Lemon Squeezy pair)
@@ -46,7 +46,7 @@ primary_region = "iad"
   DAY_GOAL_HOUR = "21"
 
 [mounts]
-  source = "wc_data"
+  source = "trigger_data"            # the existing volume of the personal server this app used to be
   destination = "/data"
 
 [[vm]]
