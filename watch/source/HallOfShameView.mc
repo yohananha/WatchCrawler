@@ -106,7 +106,7 @@ class HallOfShameView extends WatchUi.View {
 
     (:user)
     private function menuHint() as String? {
-        return null;
+        return "MENU unlock";
     }
 
     function onHide() as Void {

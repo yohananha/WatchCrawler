@@ -229,6 +229,7 @@ class DayEvents {
     }
 
     // Debug-only: a resting-HR event that is clearly better than usual.
+    (:dev)
     static function buildRestingHrDemo() as Dictionary {
         var core = base("resting_hr", "BPM", "48 BPM", :epic, { "restingHr" => "48" });
         core.put("value", 48.0f);

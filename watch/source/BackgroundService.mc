@@ -38,16 +38,7 @@ class BackgroundService extends System.ServiceDelegate {
     }
 
     function onTriggerChecked(armed as Boolean, kind as String?) as Void {
-        if (armed) {
-            _isTest = true;
-            BgStatus.mark("trigger armed (" + kind + ") -> resolving");
-            // See ActivityDetector.buildFakeCore: fixed values, tier forced
-            // to :legendary. Its baselineMean/Std are null, so the server
-            // computes its own tier for the TEXT (probably :common) - a
-            // cosmetic mismatch with our local :legendary styling/sound,
-            // fine for a "does the round trip work" test.
-            var test = ActivityDetector.fakeCoreForKind(kind);
-            AchievementResolver.get().resolve(test, method(:onResolved));
+        if (armed && fireTestTrigger(kind)) {
             return;
         }
 
@@ -74,6 +65,28 @@ class BackgroundService extends System.ServiceDelegate {
 
         BgStatus.mark("new activity -> resolving");
         AchievementResolver.get().resolve(core, method(:onResolved));
+    }
+
+    // Remote test trigger: developer builds only. Returns true when it took over this run.
+    (:dev)
+    private function fireTestTrigger(kind as String?) as Boolean {
+        _isTest = true;
+        BgStatus.mark("trigger armed (" + kind + ") -> resolving");
+        // See ActivityDetector.buildFakeCore: fixed values, tier forced
+        // to :legendary. Its baselineMean/Std are null, so the server
+        // computes its own tier for the TEXT (probably :common) - a
+        // cosmetic mismatch with our local :legendary styling/sound,
+        // fine for a "does the round trip work" test.
+        var test = ActivityDetector.fakeCoreForKind(kind);
+        AchievementResolver.get().resolve(test, method(:onResolved));
+        return true;
+    }
+
+    // User builds have no fake achievements at all: even if a server claimed a
+    // test was armed, it is ignored and the run continues with real detection.
+    (:user)
+    private function fireTestTrigger(kind as String?) as Boolean {
+        return false;
     }
 
     function onResolved(achievement as Dictionary) as Void {

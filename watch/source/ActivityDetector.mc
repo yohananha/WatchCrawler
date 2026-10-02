@@ -150,6 +150,8 @@ class ActivityDetector {
     // duration that lands roughly on that tier, then resolve text via
     // AchievementResolver same as a real detection would (so this also
     // exercises the Phase 2 server path when a server URL is configured).
+    // Developer builds only: user builds must never be able to show a made-up achievement.
+    (:dev)
     static function buildFakeCore(tier as Symbol) as Dictionary {
         if (tier == :test) {
             return {
@@ -201,6 +203,7 @@ class ActivityDetector {
     }
 
     // Server test page ("kind" strings) -> the same fake events as the MENU injector.
+    (:dev)
     static function fakeCoreForKind(kind as String?) as Dictionary {
         var k = kind == null ? "legendary" : kind;
         var tiers = {
@@ -214,6 +217,7 @@ class ActivityDetector {
     }
 
     // Fake workout without going through Baseline (no history pollution).
+    (:dev)
     private static function fakeWorkout(hero as String, desc as String, durationSec as Number, distance as Number?) as Dictionary {
         var dist = distance == null ? 0 : distance;
         var core = coreDict(hero, dist, durationSec, dist / 1000.0, :common, null, null);

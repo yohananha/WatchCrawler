@@ -203,6 +203,9 @@ var dayEventSettings = DayEventSettings.FromEnvironment();
 
 app.MapGet("/health", () => Results.Ok("ok"));
 
+// The privacy policy the store listing and the unlock page link to.
+app.MapGet("/privacy", () => Results.Content(PrivacyPage.Html(hosted, Environment.GetEnvironmentVariable("PRIVACY_CONTACT")), "text/html"));
+
 // Spend so far and credit left, for `setup --usage` / --topup and curious users (admin-only when hosted).
 app.MapGet("/usage", () => Results.Ok(usage.Snapshot()));
 
