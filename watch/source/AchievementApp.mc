@@ -36,12 +36,33 @@ class AchievementApp extends Application.AppBase {
     }
 
     function getInitialView() as [Views] or [Views, InputDelegates] {
+        // Garmin's Notifications sample registers here (foreground only);
+        // the watch may not offer a notification's actions until the app has
+        // a message callback. Deferred reference, same as Notifier: the
+        // module only exists on API 5.1+ devices.
+        if (Toybox has :Notifications) {
+            var Notifications = Toybox.Notifications;
+            Notifications.registerForNotificationMessages(method(:onNotification));
+        }
         if (!PendingQueue.isEmpty()) {
             var next = PendingQueue.popNext();
             return [ new AchievementView(next as Dictionary), new AchievementDelegate() ];
         }
         var hof = new HallOfShameView();
         return [ hof, new HallOfShameDelegate(hof) ];
+    }
+
+    // "Claim reward" selected (type 2 = NOTIFICATION_MESSAGE_TYPE_SELECTED)
+    // while the app is running: show the pending achievement. Skipped when
+    // one is already on screen - e.g. getInitialView() just opened it because
+    // the action launched the app, and the queued message arrives right after.
+    function onNotification(message) as Void {
+        if (message.type != 2 || PendingQueue.isEmpty()
+            || WatchUi.getCurrentView()[0] instanceof AchievementView) {
+            return;
+        }
+        var next = PendingQueue.popNext();
+        WatchUi.pushView(new AchievementView(next as Dictionary), new AchievementDelegate(), WatchUi.SLIDE_LEFT);
     }
 
     // Called when a background temporal event fires.
