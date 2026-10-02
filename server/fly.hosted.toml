@@ -3,7 +3,7 @@
 #   fly launch --no-deploy --copy-config --config fly.hosted.toml --name watchcrawler
 #   fly volumes create wc_data --size 1 --region iad
 #   fly secrets set HOSTED=true ANTHROPIC_API_KEY=... WATCH_SHARED_KEY=... ADMIN_KEY=... \
-#       LEMONSQUEEZY_CHECKOUT_URL=https://<store>.lemonsqueezy.com/checkout/buy/<id> LEMONSQUEEZY_WEBHOOK_SECRET=...
+#       LEMONSQUEEZY_WEBHOOK_SECRET=...   (the checkout URL is public and sits in [env] below)
 #   (or PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET / PAYPAL_ENV=live instead of the Lemon Squeezy pair)
 #   fly deploy --config fly.hosted.toml --image ghcr.io/yohananha/watchcrawler-server:latest
 # WATCH_SHARED_KEY is baked into the public store build, so treat it as public; ADMIN_KEY is not.
@@ -33,6 +33,8 @@ primary_region = "iad"
   HOSTED_AI_PER_DAY = "6"
   # Safety valve: past this month's LLM spend every watch gets built-in lines (and you get a report).
   HOSTED_MONTHLY_BUDGET_USD = "150"
+  # The Lemon Squeezy product's public Buy link (the webhook secret is a `fly secret`, not here).
+  LEMONSQUEEZY_CHECKOUT_URL = "https://watchcrawler.lemonsqueezy.com/checkout/buy/2e8aafe7-44f4-467d-9cf8-eee1ebd2a949"
   ENABLE_TEST_TRIGGER = "false"
   DATA_DIR = "/data"
   TRIGGER_STATE_PATH = "/data/trigger.flag"
