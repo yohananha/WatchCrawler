@@ -34,3 +34,4 @@ watch/keys/
 
 # setup.sh copies the built watch app (with the server key baked in) here
 /WatchCrawler.prg
+/WatchCrawler.iq
