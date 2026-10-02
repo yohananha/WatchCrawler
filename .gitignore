@@ -31,3 +31,6 @@ watch/keys/
 
 # Local Docker server state (docker-compose.yml mounts ./data)
 /data/
+
+# setup.sh copies the built watch app (with the server key baked in) here
+/WatchCrawler.prg
