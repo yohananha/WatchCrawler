@@ -412,18 +412,20 @@ if (store is not null)
         if (order is null) return Results.Json(new { error = "Unreadable payload." }, statusCode: 400);
         if (order.EventName == "order_refunded")
         {
-            // Full refund: the unlock ends. A partial refund (a goodwill discount) keeps it, but you get told.
+            // Full refund: the years that order bought are taken back. A partial refund (a goodwill discount)
+            // keeps them, but you get told.
             if (order.Status != "refunded")
             {
                 reporter.Report("partial refund", $"Lemon Squeezy order {order.OrderId} is {order.Status}; licence kept.", priority: 3, tags: "moneybag");
                 return Results.Ok(new { ignored = order.Status });
             }
-            var revoked = store.RevokeOrder($"ls:{order.OrderId}");
-            reporter.Report("refund", revoked is null
-                ? $"Lemon Squeezy order {order.OrderId} refunded; no watch holds it (already revoked or never licensed)."
-                : $"Lemon Squeezy order {order.OrderId} refunded{(order.TestMode ? " (TEST MODE)" : "")}; licence revoked for {revoked.Code}.",
+            var refunded = store.RefundOrder($"ls:{order.OrderId}", DateTimeOffset.UtcNow, hosted.LicenseYears);
+            reporter.Report("refund", refunded is null
+                ? $"Lemon Squeezy order {order.OrderId} refunded; nothing to take back (unknown, unpaid or already refunded)."
+                : $"Lemon Squeezy order {order.OrderId} refunded{(order.TestMode ? " (TEST MODE)" : "")}; {refunded.Code} is now " +
+                  (refunded.LicensedUntil is { } left ? $"licensed until {left:yyyy-MM-dd}." : "unlicensed."),
                 priority: 3, tags: "moneybag");
-            return Results.Ok(new { revoked = revoked?.Code });
+            return Results.Ok(new { code = refunded?.Code, licensedUntil = refunded?.LicensedUntil?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) });
         }
         if (order.EventName != "order_created") return Results.Ok(new { ignored = order.EventName });
         if (order.Status != "paid")

@@ -213,23 +213,68 @@ public class LicenseStoreTests : IDisposable
     }
 
     [Fact]
-    public void RevokeOrder_FollowsTransfer_AndSparesALaterLicence()
+    public void RefundOrder_FirstUnlock_EndsTheLicence_Once()
+    {
+        var d = _store.Touch("w", T0);
+        _store.CreateOrder("ls:1", d.Id, d.Code, 7.99, null, T0);
+        _store.Fulfil("ls:1", T0, 3);
+
+        var after = _store.RefundOrder("ls:1", T0.AddDays(3), 3);
+        Assert.Null(after!.LicensedUntil);
+        Assert.Null(_store.ById("w")!.LicensedUntil);
+        Assert.Null(_store.RefundOrder("ls:1", T0.AddDays(4), 3));   // a repeated webhook changes nothing
+        Assert.Null(_store.RefundOrder("nope", T0, 3));
+    }
+
+    [Fact]
+    public void RefundOrder_Extension_TakesBackOnlyItsYears()
+    {
+        var d = _store.Touch("w", T0);
+        _store.CreateOrder("ls:1", d.Id, d.Code, 7.99, null, T0);
+        _store.Fulfil("ls:1", T0, 3);
+        _store.CreateOrder("ls:2", d.Id, d.Code, 7.99, null, T0.AddDays(5));
+        _store.Fulfil("ls:2", T0.AddDays(5), 3);
+        Assert.Equal(T0.AddYears(6), _store.ById("w")!.LicensedUntil);
+
+        var after = _store.RefundOrder("ls:2", T0.AddDays(6), 3);
+        Assert.Equal(T0.AddYears(3), after!.LicensedUntil);
+        Assert.Equal("ls:1", _store.ById("w")!.OrderId);   // the licence rests on the order that's left
+    }
+
+    [Fact]
+    public void RefundOrder_AfterTransfer_HitsTheNewWatch()
     {
         var d = _store.Touch("old-watch", T0);
         _store.CreateOrder("ls:1", d.Id, d.Code, 7.99, null, T0);
         _store.Fulfil("ls:1", T0, 3);
         _store.Transfer("ls:1", "new-watch", T0.AddDays(1));
 
-        var revoked = _store.RevokeOrder("ls:1");
-        Assert.Equal("new-watch", revoked!.Id);
+        var after = _store.RefundOrder("ls:1", T0.AddDays(2), 3);
+        Assert.Equal("new-watch", after!.Id);
         Assert.Null(_store.ById("new-watch")!.LicensedUntil);
-        Assert.Null(_store.RevokeOrder("ls:1"));   // a repeated webhook changes nothing
+    }
 
-        // Bought again under another order: refunding the old one must not touch it.
-        _store.CreateOrder("ls:2", "new-watch", _store.ById("new-watch")!.Code, 7.99, null, T0.AddDays(2));
-        _store.Fulfil("ls:2", T0.AddDays(2), 3);
-        Assert.Null(_store.RevokeOrder("ls:1"));
-        Assert.NotNull(_store.ById("new-watch")!.LicensedUntil);
+    [Fact]
+    public void OldDatabase_GetsTheRefundedColumn()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"wc-{Guid.NewGuid():N}.db");
+        try
+        {
+            using (var c = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
+            {
+                c.Open();
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "CREATE TABLE orders(order_id TEXT PRIMARY KEY, device_id TEXT NOT NULL, code TEXT NOT NULL, amount_usd REAL NOT NULL, coupon TEXT, created TEXT NOT NULL, captured TEXT)";
+                cmd.ExecuteNonQuery();
+            }
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            using var store = new LicenseStore(path);
+            var d = store.Touch("w", T0);
+            store.CreateOrder("ls:1", d.Id, d.Code, 7.99, null, T0);
+            store.Fulfil("ls:1", T0, 3);
+            Assert.NotNull(store.RefundOrder("ls:1", T0.AddDays(1), 3));
+        }
+        finally { try { File.Delete(path); } catch (IOException) { } }
     }
 
     [Fact]

@@ -137,7 +137,8 @@ digest is sent on the first request after 24 hours rather than from a timer. Sta
     out; no business account needed): the page links to your product's checkout with the watch code
     as `checkout[custom][code]`. Their `order_created` webhook, signed with the webhook secret, hits
     `POST /webhook/lemonsqueezy`; a `paid` order licenses the device whose code is in the custom
-    data, and an `order_refunded` webhook with status `refunded` (a full refund) revokes it again; a partial
+    data, and an `order_refunded` webhook with status `refunded` (a full refund) takes back the years that order added (ending the licence if it was the first
+    unlock); a partial
     refund only sends you a report. Tick both events on the webhook. A paid order with an unknown code is
     reported so you can license it by hand.
   - **PayPal** (alternative): `POST /unlock/order` + `POST /unlock/capture`; the server creates the

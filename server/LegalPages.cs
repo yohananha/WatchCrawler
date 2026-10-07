@@ -151,8 +151,8 @@ public static class LegalPages
           <li>write to {{CONTACT}} with your order number or the 6-character code shown on your watch.</li>
         </ul>
         <p>The refund goes back to your original payment method through Lemon Squeezy, usually within 5-10 business
-        days depending on your bank. When the refund goes through, that watch's unlock ends and the app goes back to its
-        built-in lines.</p>
+        days depending on your bank. When the refund goes through, the years that purchase added are taken back; if it was your
+        first unlock, the app goes back to its built-in lines.</p>
 
         <h2>After {{REFUND_DAYS}} days</h2>
         <p>If the app stops working on your watch because of a problem on our side, write to us and we'll fix it or refund

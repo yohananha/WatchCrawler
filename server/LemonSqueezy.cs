@@ -7,8 +7,8 @@ namespace GarminAchievements;
 
 /// <summary>Lemon Squeezy as merchant of record: they run the checkout, collect tax, handle refunds and pay the
 /// developer out. We only (1) send the buyer to the hosted checkout with the watch code in the custom data and
-/// (2) license the device when the signed <c>order_created</c> webhook says the order is paid, and revoke it when
-/// <c>order_refunded</c> says it was refunded in full (both events must be ticked on the webhook).
+/// (2) license the device when the signed <c>order_created</c> webhook says the order is paid, and take back the years it
+/// added when <c>order_refunded</c> says it was refunded in full (both events must be ticked on the webhook).
 /// Env: LEMONSQUEEZY_CHECKOUT_URL (the product's "Buy" link), LEMONSQUEEZY_WEBHOOK_SECRET (set on the webhook).</summary>
 public static class LemonSqueezy
 {

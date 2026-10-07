@@ -110,6 +110,6 @@ calls per day with the estimates (`GET /admin/stats`).
       narration; works with built-in lines without it", privacy policy URL.
 - [ ] Privacy policy: activity data → your server → Anthropic (zero retention), history kept 10 lines
       per watch, deletion on request (`DELETE /admin/devices/{code}`).
-- [ ] Refund: in the Lemon Squeezy dashboard; a full refund revokes the licence automatically
+- [ ] Refund: in the Lemon Squeezy dashboard; a full refund takes back that order's years automatically
       (`order_refunded` webhook). By hand: `POST /admin/license {code, revoke:true}`.
 - [ ] Income tax on the payouts.

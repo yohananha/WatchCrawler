@@ -164,6 +164,9 @@ public sealed class LicenseStore : IDisposable
                 coupon TEXT, created TEXT NOT NULL, captured TEXT);
             CREATE TABLE IF NOT EXISTS spend(month TEXT PRIMARY KEY, usd REAL NOT NULL DEFAULT 0, calls INTEGER NOT NULL DEFAULT 0);
             """);
+        // Added after launch: databases created before it get the column here.
+        if (Scalar<int>("SELECT COUNT(*) FROM pragma_table_info('orders') WHERE name = 'refunded'") == 0)
+            Exec("ALTER TABLE orders ADD COLUMN refunded TEXT");
     }
 
     // ---- devices -----------------------------------------------------------
@@ -236,17 +239,39 @@ public sealed class LicenseStore : IDisposable
         lock (_lock) Exec("UPDATE devices SET licensed_until = NULL, order_id = NULL WHERE id = $id", ("$id", deviceId));
     }
 
-    /// <summary>The order was refunded: revoke the watch that holds its licence now (it follows transfers). A watch
-    /// licensed again under another order since is left alone. Null when no watch holds that order.</summary>
-    public Device? RevokeOrder(string orderId)
+    /// <summary>The order was refunded: take back the years it added, from the watch that holds the licence now
+    /// (orders follow transfers). A refunded extension leaves the earlier years; a refunded first unlock ends the
+    /// licence. Idempotent: null when the order is unknown, never paid, or already refunded.</summary>
+    public Device? RefundOrder(string orderId, DateTimeOffset now, int years)
     {
         lock (_lock)
         {
-            var d = ReadDevice("order_id = $v", orderId);
-            if (d is null) return null;
-            Revoke(d.Id);
-            return d with { LicensedUntil = null, OrderId = null };
+            var o = GetOrder(orderId);
+            if (o is null || o.Captured is null) return null;
+            if (Exec("UPDATE orders SET refunded = $t WHERE order_id = $o AND refunded IS NULL", ("$t", Iso(now)), ("$o", orderId)) == 0)
+                return null;
+            var d = ReadDevice("id = $v", o.DeviceId);
+            if (d?.LicensedUntil is not { } until) return d;
+            var left = until.AddYears(-years);
+            if (left <= now)
+            {
+                Revoke(d.Id);
+                return d with { LicensedUntil = null, OrderId = null };
+            }
+            // The licence now rests on the latest paid order that wasn't refunded (that's what a transfer looks up).
+            var holder = d.OrderId == orderId ? LatestPaidOrder(d.Id) : d.OrderId;
+            Exec("UPDATE devices SET licensed_until = $until, order_id = $order WHERE id = $id",
+                ("$until", Iso(left)), ("$order", (object?)holder ?? DBNull.Value), ("$id", d.Id));
+            return d with { LicensedUntil = left, OrderId = holder };
         }
+    }
+
+    private string? LatestPaidOrder(string deviceId)
+    {
+        using var cmd = _db.CreateCommand();
+        cmd.CommandText = "SELECT order_id FROM orders WHERE device_id = $d AND captured IS NOT NULL AND refunded IS NULL ORDER BY captured DESC LIMIT 1";
+        cmd.Parameters.AddWithValue("$d", deviceId);
+        return cmd.ExecuteScalar() as string;
     }
 
     /// <summary>A user got a new watch: the licence follows the order, so re-key it to the new device.</summary>
@@ -261,6 +286,8 @@ public sealed class LicenseStore : IDisposable
                 Touch(toDeviceId, now);
             Exec("UPDATE devices SET licensed_until = $until, order_id = $order WHERE id = $id",
                 ("$until", Iso(from.LicensedUntil.Value)), ("$order", orderId), ("$id", toDeviceId));
+            // The paid orders behind the licence move with it, so a later refund finds the right watch.
+            Exec("UPDATE orders SET device_id = $to WHERE device_id = $from AND captured IS NOT NULL", ("$to", toDeviceId), ("$from", from.Id));
             return ReadDevice("id = $v", toDeviceId);
         }
     }

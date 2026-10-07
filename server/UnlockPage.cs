@@ -88,12 +88,13 @@ public static class UnlockPage
               box.innerHTML = (d.coupon ? '<s>$' + d.listPrice.toFixed(2) + '</s>' : '') + (d.price === 0 ? 'Free' : '$' + d.price.toFixed(2))
                 + (d.discountAtCheckout ? ' <small class="muted">(discount ' + d.discountAtCheckout + ' applied at checkout)</small>' : '');
               say(d.status, d.licensed ? 'ok' : '');
-              if (d.licensed) return;
+              // Already unlocked: the status says so, and paying again extends it (the button stays).
               if (d.price === 0) { el('redeem').hidden = false; return; }
               if (LEMON) {
                 if (!d.checkoutUrl) { say('Payments are not configured on this server.', 'err'); return; }
                 var a = el('buy'); a.href = d.checkoutUrl; a.hidden = false;
-                say('Pay by card or PayPal on the next page (secure checkout by Lemon Squeezy). Your watch unlocks within a few hours of paying.');
+                if (!d.licensed)
+                  say('Pay by card or PayPal on the next page (secure checkout by Lemon Squeezy). Your watch unlocks within a few hours of paying.');
                 return;
               }
               if (!window.paypal) { say('Payments are not configured on this server.', 'err'); return; }
