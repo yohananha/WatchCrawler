@@ -35,6 +35,9 @@ primary_region = "iad"
   HOSTED_MONTHLY_BUDGET_USD = "150"
   # The Lemon Squeezy product's public Buy link (the webhook secret is a `fly secret`, not here).
   LEMONSQUEEZY_CHECKOUT_URL = "https://watchcrawler.lemonsqueezy.com/checkout/buy/2e8aafe7-44f4-467d-9cf8-eee1ebd2a949"
+  # Shown on the home, terms, refunds and privacy pages. CONNECTIQ_URL (the store listing) turns the
+  # home page's "coming soon" into a store button once the app is published.
+  SUPPORT_EMAIL = "yohananha@gmail.com"
   ENABLE_TEST_TRIGGER = "false"
   DATA_DIR = "/data"
   TRIGGER_STATE_PATH = "/data/trigger.flag"

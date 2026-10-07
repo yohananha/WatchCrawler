@@ -203,8 +203,13 @@ var dayEventSettings = DayEventSettings.FromEnvironment();
 
 app.MapGet("/health", () => Results.Ok("ok"));
 
-// The privacy policy the store listing and the unlock page link to.
-app.MapGet("/privacy", () => Results.Content(PrivacyPage.Html(hosted, Environment.GetEnvironmentVariable("PRIVACY_CONTACT")), "text/html"));
+// The public pages: privacy policy (the store listing links to it), terms and refunds (Lemon Squeezy wants them),
+// and in hosted mode the product page at /. Images for them are served from wwwroot/img.
+app.UseStaticFiles();
+var contact = Site.ContactFromEnvironment();
+app.MapGet("/privacy", () => Results.Content(PrivacyPage.Html(hosted, contact), "text/html"));
+app.MapGet("/terms", () => Results.Content(LegalPages.Terms(hosted, contact), "text/html"));
+app.MapGet("/refunds", () => Results.Content(LegalPages.Refunds(hosted, contact), "text/html"));
 
 // Spend so far and credit left, for `setup --usage` / --topup and curious users (admin-only when hosted).
 app.MapGet("/usage", () => Results.Ok(usage.Snapshot()));
@@ -265,9 +270,10 @@ static IResult TriggerDisabled() =>
 
 // Unauthenticated on purpose (the key goes in the page's own field, sent as
 // a header via fetch() below) - this is just the HTML shell. Hosted servers
-// send visitors to the unlock page instead.
+// show the product page instead.
 var kindOptions = string.Join("", TestTrigger.Kinds.Select(k => $"<option value=\"{k.Key}\">{k.Value}</option>"));
-app.MapGet("/", () => hosted.Enabled ? Results.Redirect("/unlock") : Results.Content(("""
+var storeUrl = Environment.GetEnvironmentVariable("CONNECTIQ_URL");
+app.MapGet("/", () => hosted.Enabled ? Results.Content(LandingPage.Html(hosted, contact, storeUrl), "text/html") : Results.Content(("""
     <!doctype html>
     <html>
     <head><meta charset="utf-8"><title>WatchCrawler</title></head>

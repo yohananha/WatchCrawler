@@ -2,16 +2,15 @@ namespace GarminAchievements;
 
 /// <summary>The privacy policy the Connect IQ Store listing and the unlock page link to (GET /privacy). It describes what
 /// this code actually does, so keep it in step: if a new field is sent to the server or the LLM, say so here.
-/// PRIVACY_CONTACT (env) is how people reach the operator; it defaults to the project's GitHub issues.</summary>
+/// The contact comes from <see cref="Site.ContactFromEnvironment"/>.</summary>
 public static class PrivacyPage
 {
     public const string Updated = "2026-10-02";
 
     public static string Html(HostedSettings s, string? contact) => Template
         .Replace("{{UPDATED}}", Updated)
-        .Replace("{{CONTACT}}", string.IsNullOrWhiteSpace(contact)
-            ? "<a href=\"https://github.com/yohananha/WatchCrawler/issues\">github.com/yohananha/WatchCrawler/issues</a>"
-            : System.Net.WebUtility.HtmlEncode(contact))
+        .Replace("{{CONTACT}}", Site.ContactHtml(contact))
+        .Replace("{{FOOTER}}", Site.Footer(contact))
         .Replace("{{TRIAL_DAYS}}", s.TrialDays.ToString())
         .Replace("{{YEARS}}", s.LicenseYears.ToString());
 
@@ -30,6 +29,8 @@ public static class PrivacyPage
           .muted { opacity: .7; }
           table { border-collapse: collapse; width: 100%; font-size: .95rem; }
           th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid #8884; }
+          footer.site { margin-top: 40px; padding-top: 14px; border-top: 1px solid #8884; font-size: .9rem; opacity: .8; }
+          footer.site p { margin: 4px 0; }
         </style>
         </head>
         <body>
@@ -97,6 +98,8 @@ public static class PrivacyPage
 
         <h2>Contact</h2>
         <p>{{CONTACT}}</p>
+
+        {{FOOTER}}
         </body>
         </html>
         """;

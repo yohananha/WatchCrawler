@@ -61,9 +61,10 @@ public static class UnlockPage
         <a id="buy" hidden><button>Pay now</button></a>
         <button id="redeem" hidden onclick="redeem()">Unlock for free</button>
 
-        <footer>One-time payment, no subscription. If it doesn't work on your watch within a day, reply to your receipt email and
-        you'll get a refund. Your activity data goes from the watch to this server and to the AI provider only to write the jokes;
-        nothing is sold or shared. <a href="/privacy">Privacy policy</a>.</footer>
+        <footer>One-time payment, no subscription. Refunds within 14 days, no questions asked: reply to your receipt email.
+        Your activity data goes from the watch to this server and to the AI provider only to write the jokes;
+        nothing is sold or shared. <a href="/">About</a> · <a href="/terms">Terms</a> · <a href="/refunds">Refunds</a> ·
+        <a href="/privacy">Privacy</a></footer>
 
         <script>
           var LEMON = {{LEMON}};
