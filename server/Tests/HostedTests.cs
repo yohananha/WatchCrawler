@@ -213,6 +213,26 @@ public class LicenseStoreTests : IDisposable
     }
 
     [Fact]
+    public void RevokeOrder_FollowsTransfer_AndSparesALaterLicence()
+    {
+        var d = _store.Touch("old-watch", T0);
+        _store.CreateOrder("ls:1", d.Id, d.Code, 7.99, null, T0);
+        _store.Fulfil("ls:1", T0, 3);
+        _store.Transfer("ls:1", "new-watch", T0.AddDays(1));
+
+        var revoked = _store.RevokeOrder("ls:1");
+        Assert.Equal("new-watch", revoked!.Id);
+        Assert.Null(_store.ById("new-watch")!.LicensedUntil);
+        Assert.Null(_store.RevokeOrder("ls:1"));   // a repeated webhook changes nothing
+
+        // Bought again under another order: refunding the old one must not touch it.
+        _store.CreateOrder("ls:2", "new-watch", _store.ById("new-watch")!.Code, 7.99, null, T0.AddDays(2));
+        _store.Fulfil("ls:2", T0.AddDays(2), 3);
+        Assert.Null(_store.RevokeOrder("ls:1"));
+        Assert.NotNull(_store.ById("new-watch")!.LicensedUntil);
+    }
+
+    [Fact]
     public void Stats_CountStates()
     {
         _store.Touch("trial", T0);

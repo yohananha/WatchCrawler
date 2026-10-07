@@ -94,7 +94,7 @@ calls per day with the estimates (`GET /admin/stats`).
 
 - [ ] Lemon Squeezy account (check your country is in their payout list first). One product
       "WatchCrawler unlock", $7.99, single payment. Copy its **Buy link** → `LEMONSQUEEZY_CHECKOUT_URL`.
-      Settings → Webhooks → add `https://<server>/webhook/lemonsqueezy`, event `order_created`, a
+      Settings → Webhooks → add `https://<server>/webhook/lemonsqueezy`, events `order_created` and `order_refunded`, a
       long random signing secret → `LEMONSQUEEZY_WEBHOOK_SECRET`. Use their **test mode** first: a
       test order must flip your watch's MENU screen to "MANA RESTORED".
 - [ ] Discounts for friends: 100% = our coupons (`coupon add FRIEND 100 --uses 1`); partial =
@@ -110,5 +110,6 @@ calls per day with the estimates (`GET /admin/stats`).
       narration; works with built-in lines without it", privacy policy URL.
 - [ ] Privacy policy: activity data → your server → Anthropic (zero retention), history kept 10 lines
       per watch, deletion on request (`DELETE /admin/devices/{code}`).
-- [ ] Refund: Lemon Squeezy dashboard + `POST /admin/license {code, revoke:true}`.
+- [ ] Refund: in the Lemon Squeezy dashboard; a full refund revokes the licence automatically
+      (`order_refunded` webhook). By hand: `POST /admin/license {code, revoke:true}`.
 - [ ] Income tax on the payouts.

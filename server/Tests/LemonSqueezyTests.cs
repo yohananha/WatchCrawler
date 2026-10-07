@@ -42,6 +42,15 @@ public class LemonSqueezyTests
     }
 
     [Fact]
+    public void Parse_ReadsRefundEvent()
+    {
+        var o = LemonSqueezy.Parse(PaidOrder.Replace("order_created", "order_refunded").Replace("\"paid\"", "\"refunded\""));
+        Assert.Equal("order_refunded", o!.EventName);
+        Assert.Equal("refunded", o.Status);
+        Assert.Equal("1234567", o.OrderId);
+    }
+
+    [Fact]
     public void Parse_ToleratesMissingCustomData_AndGarbage()
     {
         var o = LemonSqueezy.Parse("""{"meta":{"event_name":"order_created"},"data":{"id":"1","attributes":{"status":"pending","total":100}}}""");

@@ -236,6 +236,19 @@ public sealed class LicenseStore : IDisposable
         lock (_lock) Exec("UPDATE devices SET licensed_until = NULL, order_id = NULL WHERE id = $id", ("$id", deviceId));
     }
 
+    /// <summary>The order was refunded: revoke the watch that holds its licence now (it follows transfers). A watch
+    /// licensed again under another order since is left alone. Null when no watch holds that order.</summary>
+    public Device? RevokeOrder(string orderId)
+    {
+        lock (_lock)
+        {
+            var d = ReadDevice("order_id = $v", orderId);
+            if (d is null) return null;
+            Revoke(d.Id);
+            return d with { LicensedUntil = null, OrderId = null };
+        }
+    }
+
     /// <summary>A user got a new watch: the licence follows the order, so re-key it to the new device.</summary>
     public Device? Transfer(string orderId, string toDeviceId, DateTimeOffset now)
     {
