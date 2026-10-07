@@ -59,7 +59,12 @@ class HallOfShameView extends WatchUi.View {
         var tier = item.hasKey("tier") ? item["tier"] as String : "common";
         var pair = Palette.tierColorPair(Baseline.tierFromName(tier));
 
-        drawShadowedLine(dc, "" + (_index + 1) + "/" + _items.size(), cx, 48, _fPx16, [0x9A9AA4, 0x000000]);
+        // Never claimed (replaced by a newer one, or expired) - see PendingQueue.
+        var counter = "" + (_index + 1) + "/" + _items.size();
+        if (item.hasKey("missed") && item["missed"] == true) {
+            counter += "  MISSED";
+        }
+        drawShadowedLine(dc, counter, cx, 48, _fPx16, [0x9A9AA4, 0x000000]);
         drawShadowedLine(dc, tier.toUpper(), cx, 78, _fPx24, pair);
         var tierSym = Baseline.tierFromName(tier);
         if (TierIcon.hasIcon(tierSym)) {

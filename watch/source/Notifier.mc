@@ -10,6 +10,9 @@ import Toybox.System;
 //
 // Tapping the "Claim reward" action launches the app, which opens directly on
 // the pending achievement (AchievementApp.getInitialView pops PendingQueue).
+// Each new notification replaces our previous one (:dismissPrevious), and
+// PendingQueue.push likewise archives the unclaimed item as "missed" - one
+// notification, one pending achievement, so Claim always matches.
 //
 // Every path returns a short status string instead of failing silently, so
 // Phase 0 can show on-screen what actually happened (see DiagnosticDelegate).
@@ -50,6 +53,7 @@ class Notifier {
                 :body => body,
                 :data => "achievement",
                 :actions => [{ :label => "Claim reward", :data => "claim" }],
+                :dismissPrevious => true, // the SDK default, made explicit - see header
             };
             Notifications.showNotification(title, subtitle, options);
             return "showNotification() called OK";

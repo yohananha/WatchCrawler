@@ -3,7 +3,7 @@ import Toybox.Lang;
 import Toybox.Time;
 
 // Storage-backed queue of achievements waiting to be shown in the
-// foreground, plus a short rolling history (the future Hall of Shame).
+// foreground, plus a short rolling history (the Hall of Shame).
 (:background)
 class PendingQueue {
     private static const MAX_HISTORY = 10;
@@ -15,28 +15,33 @@ class PendingQueue {
     private static const QUEUE_KEY = "pendingQueueV2";
     private static const HISTORY_KEY = "achievementHistoryV2";
 
-    // Waiting items expire, so opening the app never replays a pile of stale
-    // events: real ones after 24 h, debug injects after 30 min, and at most
-    // MAX_PENDING wait at once (the oldest are dropped). Items saved by older
-    // builds have no timestamp and count as expired.
-    private static const MAX_PENDING = 3;
-    private static const TTL_SEC = 24 * 3600;
+    // Only the newest unclaimed achievement waits, matching the single live
+    // notification (Notifier posts with :dismissPrevious). Anything it
+    // replaces, or that expires unclaimed, moves into history marked
+    // "missed" - so "Claim reward" always opens the achievement you just got,
+    // never a backlog from last night. Real items expire after 8 h, debug
+    // injects after 30 min. Items saved by older builds have no timestamp
+    // and count as expired.
+    private static const MAX_PENDING = 1;
+    private static const TTL_SEC = 8 * 3600;
     private static const TTL_TEST_SEC = 30 * 60;
 
     // isTest: debug-injected item (short expiry).
     static function push(achievement as Dictionary, isTest as Boolean) as Void {
+        var queue = current();
+        for (var i = 0; i < queue.size(); i++) {
+            archiveMissed(queue[i]);
+        }
         achievement.put("queuedAt", Time.now().value());
         achievement.put("isTest", isTest);
-        var queue = current();
-        queue.add(achievement);
-        Application.Storage.setValue(QUEUE_KEY, prune(queue));
+        Application.Storage.setValue(QUEUE_KEY, [achievement] as Array<Dictionary>);
     }
 
     static function isEmpty() as Boolean {
         return current().size() == 0;
     }
 
-    // The stored queue with expired/excess items removed (and saved back).
+    // The stored queue with expired/excess items moved to history (and saved back).
     private static function current() as Array<Dictionary> {
         var stored = Application.Storage.getValue(QUEUE_KEY);
         if (!(stored instanceof Array)) {
@@ -56,20 +61,23 @@ class PendingQueue {
             var item = queue[i];
             var at = item.hasKey("queuedAt") ? item["queuedAt"] : null;
             if (!(at instanceof Number)) {
-                continue;
+                continue; // older build's shape: drop, don't archive
             }
             var ttl = (item.hasKey("isTest") && item["isTest"] == true) ? TTL_TEST_SEC : TTL_SEC;
             if (now - (at as Number) <= ttl) {
                 kept.add(item);
+            } else {
+                archiveMissed(item);
             }
         }
         while (kept.size() > MAX_PENDING) {
+            archiveMissed(kept[0]);
             kept.remove(kept[0]);
         }
         return kept;
     }
 
-    // Removes and returns the oldest pending achievement, recording it into
+    // Removes and returns the pending achievement, recording it into
     // history. Returns null if the queue is empty.
     static function popNext() as Dictionary? {
         var arr = current();
@@ -86,6 +94,12 @@ class PendingQueue {
     static function history() as Array<Dictionary> {
         var h = Application.Storage.getValue(HISTORY_KEY);
         return h == null ? ([] as Array<Dictionary>) : (h as Array<Dictionary>);
+    }
+
+    // Never claimed: goes straight to the Hall of Shame, flagged so it shows as MISSED.
+    private static function archiveMissed(achievement as Dictionary) as Void {
+        achievement.put("missed", true);
+        addToHistory(achievement);
     }
 
     private static function addToHistory(achievement as Dictionary) as Void {
