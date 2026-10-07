@@ -4,13 +4,17 @@ import Toybox.Math;
 import Toybox.System;
 import Toybox.Time;
 
-// serverUrl/sharedKey. Application.Properties is the source of truth, but
-// it is not reliably readable from the background process: on a real watch
-// the background job reported "no serverUrl set" while the foreground app
-// (same install) reached the server fine. Storage does work in the
-// background (BgStatus depends on it), so the foreground copies the values
-// into Storage at launch (mirrorToStorage) and the background falls back to
-// that copy. Open the app once after installing to populate it.
+// serverUrl/sharedKey. A build with values baked in (build_personal.sh,
+// store builds) always uses those: Properties and their Storage mirror
+// survive a sideloaded update, so a key from an older install used to win
+// over the new build's key and every request got 401 - silently, since the
+// watch then writes its own lines. Without baked values (plain dev builds),
+// Application.Properties is the source of truth, but it is not reliably
+// readable from the background process: on a real watch the background job
+// reported "no serverUrl set" while the foreground app (same install)
+// reached the server fine. Storage does work in the background (BgStatus
+// depends on it), so the foreground copies the values into Storage at launch
+// (mirrorToStorage) and the background falls back to that copy.
 (:background)
 class Config {
     static var lastBakedError as String? = null;
@@ -62,15 +66,15 @@ class Config {
     }
 
     private static function read(propKey as String, storeKey as String) as String? {
+        var b = fromBaked(propKey == "serverUrl" ? Rez.Strings.CfgServerUrl : Rez.Strings.CfgSharedKey);
+        if (b != null) {
+            return b;
+        }
         var v = fromProperties(propKey);
         if (v != null) {
             return v;
         }
-        var s = fromStorage(storeKey);
-        if (s != null) {
-            return s;
-        }
-        return fromBaked(propKey == "serverUrl" ? Rez.Strings.CfgServerUrl : Rez.Strings.CfgSharedKey);
+        return fromStorage(storeKey);
     }
 
     // Compile-time value from resources/strings (bypasses persisted

@@ -165,6 +165,12 @@ app.Use(async (context, next) =>
         // which surfaced as a confusing -400 (INVALID_HTTP_BODY_IN_
         // NETWORK_RESPONSE) instead of a clear 401 - found by testing
         // an intentionally-wrong key against the real deployment.
+        // A real watch (it sends its device id) with the wrong key falls back to its built-in lines
+        // and can never deliver its own X-Watch-Error, so this is the only place it gets noticed.
+        if (context.Request.Headers["X-Device-Id"].FirstOrDefault() is { Length: > 0 } dev)
+            reporter.Report("watch bad key",
+                $"Watch {dev[..Math.Min(8, dev.Length)]} was refused on {path} (key {(context.Request.Headers.ContainsKey("X-Watch-Key") ? "wrong" : "missing")}). It only gets built-in lines until it is rebuilt with WATCH_SHARED_KEY.",
+                priority: 4, tags: "key");
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         await context.Response.WriteAsJsonAsync(new { error = "Missing or invalid X-Watch-Key." });
         return;

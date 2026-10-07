@@ -41,6 +41,18 @@ class SystemNotice {
         }
     }
 
+    // The server answered 401: this watch's key is wrong, so every achievement
+    // quietly falls back to the built-in lines. Say so (once a day, like any
+    // notice) until a request gets through again - store() then replaces it.
+    static function storeBadKey() as Void {
+        Application.Storage.setValue(KEY, {
+            "state" => "badkey",
+            "title" => "Announcer Locked Out",
+            "text" => "The server refused this watch's key. The System is reading from its tiny backup script.",
+            "reward" => "Reinstall the app to restore the snark.",
+        });
+    }
+
     // What a hosted server last said about this watch's licence (null on a personal server).
     static function license() as Dictionary? {
         var l = Application.Storage.getValue(LICENSE_KEY);
@@ -59,12 +71,13 @@ class SystemNotice {
             return null;
         }
         Application.Storage.setValue(SHOWN_KEY, day);
-        var out = "out".equals(n["state"]);
+        var state = n["state"];
+        var badKey = "badkey".equals(state);
         return {
             "eventType" => "system_notice",
-            "hero" => "MANA",
+            "hero" => badKey ? "SERVER" : "MANA",
             "title" => n["title"],
-            "stat" => out ? "0 MANA" : "LOW MANA",
+            "stat" => badKey ? "KEY REFUSED" : "out".equals(state) ? "0 MANA" : "LOW MANA",
             "text" => n["text"],
             "reward" => n["reward"],
             "tier" => "cursed",

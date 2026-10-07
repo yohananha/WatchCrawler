@@ -116,6 +116,9 @@ class AchievementResolver {
         } else {
             System.println("[SRV] request failed, code=" + responseCode);
             WatchErr.record("achievement", responseCode);
+            if (responseCode == 401) {
+                SystemNotice.storeBadKey();
+            }
             finishWithFallback();
         }
     }

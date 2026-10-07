@@ -80,6 +80,9 @@ class TriggerChecker {
             SystemNotice.store(data as Dictionary);
         } else {
             WatchErr.record("poll", responseCode);
+            if (responseCode == 401) {
+                SystemNotice.storeBadKey();
+            }
         }
         // Day-event tuning rides along on every poll (see server DayEventSettings).
         if (responseCode == 200 && data instanceof Dictionary && data["settings"] instanceof Dictionary) {

@@ -51,10 +51,10 @@ class BackgroundService extends System.ServiceDelegate {
                 AchievementResolver.get().resolve(core, method(:onResolved));
                 return;
             }
-            // Nothing happened: a good moment for a pending "top up your API credit" message.
+            // Nothing happened: a good moment for a pending system message (API credit, refused key).
             var notice = SystemNotice.takeDue();
             if (notice != null) {
-                BgStatus.mark("credit notice -> notifying");
+                BgStatus.mark("system notice -> notifying");
                 onResolved(notice as Dictionary);
                 return;
             }
