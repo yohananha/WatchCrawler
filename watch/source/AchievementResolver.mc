@@ -35,6 +35,13 @@ class AchievementResolver {
     function initialize() {
     }
 
+    // The watch's own lines, no network: for an event a previous run never got to show.
+    function resolveLocal(core as Dictionary, callback as Method) as Void {
+        _core = core;
+        _callback = callback;
+        finishWithFallback();
+    }
+
     function resolve(core as Dictionary, callback as Method) as Void {
         if (core.hasKey("isComplete") && core["isComplete"] == true) {
             callback.invoke(core);

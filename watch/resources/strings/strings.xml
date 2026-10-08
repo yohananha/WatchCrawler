@@ -1,6 +1,8 @@
 <strings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
     <string id="AppName">WatchCrawler</string>
-    <!-- Empty in git; tools/build_personal.sh bakes real values into a gitignored copy. -->
-    <string id="CfgServerUrl"></string>
-    <string id="CfgSharedKey"></string>
+    <!-- Empty in git; tools/build_personal.sh bakes real values into a gitignored copy.
+         scope="background": the background job reads these too, and a string without a scope
+         is foreground-only - looking it up there kills the process (try/catch can't stop it). -->
+    <string id="CfgServerUrl" scope="background"></string>
+    <string id="CfgSharedKey" scope="background"></string>
 </strings>

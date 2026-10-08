@@ -135,8 +135,8 @@ import sys
 from xml.sax.saxutils import escape
 path, url, key = sys.argv[1], escape(sys.argv[2].rstrip("/")), escape(sys.argv[3])
 t = open(path, encoding="utf-8").read()
-t = t.replace('<string id="CfgServerUrl"></string>', '<string id="CfgServerUrl">' + url + '</string>')
-t = t.replace('<string id="CfgSharedKey"></string>', '<string id="CfgSharedKey">' + key + '</string>')
+t = t.replace('<string id="CfgServerUrl" scope="background"></string>', '<string id="CfgServerUrl" scope="background">' + url + '</string>')
+t = t.replace('<string id="CfgSharedKey" scope="background"></string>', '<string id="CfgSharedKey" scope="background">' + key + '</string>')
 open(path, "w", encoding="utf-8").write(t)
 PYEOF
 

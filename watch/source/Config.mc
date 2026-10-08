@@ -61,12 +61,12 @@ class Config {
     static function describe() as String {
         return "props:" + (fromProperties("serverUrl") == null ? "-" : "url")
             + " store:" + (fromStorage(STORE_URL) == null ? "-" : "url")
-            + " baked:" + (fromBaked(Rez.Strings.CfgServerUrl) == null ? "-" : "url")
+            + " baked:" + (fromBaked("serverUrl") == null ? "-" : "url")
             + (lastBakedError == null ? "" : " err:" + lastBakedError);
     }
 
     private static function read(propKey as String, storeKey as String) as String? {
-        var b = fromBaked(propKey == "serverUrl" ? Rez.Strings.CfgServerUrl : Rez.Strings.CfgSharedKey);
+        var b = fromBaked(propKey);
         if (b != null) {
             return b;
         }
@@ -79,9 +79,10 @@ class Config {
 
     // Compile-time value from resources/strings (bypasses persisted
     // Properties, which can hold an empty value from an older install).
-    private static function fromBaked(id) as String? {
+    // The Rez lookup stays inside the try (the strings are background-scoped, see strings.xml).
+    private static function fromBaked(propKey as String) as String? {
         try {
-            return nonEmpty(Application.loadResource(id));
+            return nonEmpty(Application.loadResource(propKey.equals("serverUrl") ? Rez.Strings.CfgServerUrl : Rez.Strings.CfgSharedKey));
         } catch (ex) {
             lastBakedError = ex.getErrorMessage();
             return null;
