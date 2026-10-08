@@ -56,6 +56,7 @@ builder.Services.AddSingleton(settings);
 builder.Services.AddSingleton(reporting);
 builder.Services.AddSingleton(hosted);
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<ModelResolver>();
 builder.Services.AddSingleton<ProviderFactory>();
 builder.Services.AddSingleton<RecentHistory>();
 builder.Services.AddSingleton<AchievementGenerator>();
@@ -99,6 +100,12 @@ var usage = app.Services.GetRequiredService<UsageTracker>();
 var store = hosted.Enabled ? app.Services.GetRequiredService<LicenseStore>() : null;
 var paypal = hosted.Enabled ? app.Services.GetService<PayPalClient>() : null;
 var lemon = hosted.Enabled ? LemonSqueezy.Settings.FromEnvironment(Environment.GetEnvironmentVariable) : null;
+// A "-latest" model alias: look it up now, so the startup log says which model is in use.
+if (settings.Providers.TryGetValue(settings.ActiveProvider, out var active) && active.Kind == "anthropic"
+    && ModelResolver.IsLatestAlias(active.Model) && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(active.ApiKeyEnv)))
+    _ = app.Services.GetRequiredService<ModelResolver>()
+        .ResolveAsync(active, app.Services.GetRequiredService<IHttpClientFactory>().CreateClient(), CancellationToken.None);
+
 if (install.IsNew)
     reporter.Report("new install", $"A new WatchCrawler server started ({settings.ActiveProvider}{(hosted.Enabled ? ", hosted" : "")}).", priority: 2, tags: "tada");
 

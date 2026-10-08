@@ -84,6 +84,11 @@ public sealed class ProviderSettings
     public string Kind { get; set; } = "openai";
     public string BaseUrl { get; set; } = "";
     public string Model { get; set; } = "";
+
+    /// <summary>Anthropic only, with a Model like "claude-haiku-latest" (see ModelResolver): the model used when
+    /// the newest one can't be looked up or rejects a request.</summary>
+    public string FallbackModel { get; set; } = "";
+
     public string ApiKeyEnv { get; set; } = "";
 
     /// <summary>OpenAI-compatible reasoning models only: sends thinking={type:disabled} so the token budget goes to the answer.</summary>

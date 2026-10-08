@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -51,16 +52,36 @@ internal static class ApiKeys
 }
 
 /// <summary>Anthropic Messages API (Claude Haiku etc.).</summary>
-public sealed class AnthropicProvider(string name, ProviderSettings settings, HttpClient http) : ILlmProvider
+public sealed class AnthropicProvider(string name, ProviderSettings settings, HttpClient http, ModelResolver? resolver = null) : ILlmProvider
 {
     public string Name => name;
-    public string Model => settings.Model;
+    public string Model => resolver?.Current(settings) ?? settings.Model;
 
     public async Task<LlmResult> CompleteAsync(string system, string user, double temperature, CancellationToken ct)
     {
+        if (resolver is null || !ModelResolver.IsLatestAlias(settings.Model))
+            return await SendAsync(settings.Model, system, user, temperature, ct);
+
+        var model = await resolver.ResolveAsync(settings, http, ct);
+        try
+        {
+            return await SendAsync(model, system, user, temperature, ct);
+        }
+        // A newer model can refuse what this request sends (a newer generation may reject temperature, say):
+        // answer with the known-good model instead of failing every achievement until someone notices.
+        catch (LlmHttpException ex) when (ex.Status is 400 or 404 && !ex.IsOutOfCredit
+                                          && settings.FallbackModel is { Length: > 0 } fallback && model != fallback)
+        {
+            resolver.Reject(settings, model, ex);
+            return await SendAsync(settings.FallbackModel, system, user, temperature, ct);
+        }
+    }
+
+    private async Task<LlmResult> SendAsync(string model, string system, string user, double temperature, CancellationToken ct)
+    {
         var body = new
         {
-            model = settings.Model,
+            model,
             max_tokens = 400,
             temperature,
             system,
@@ -160,7 +181,91 @@ public sealed class OpenAiCompatibleProvider(string name, ProviderSettings setti
     }
 }
 
-public sealed class ProviderFactory(LlmSettings settings, IHttpClientFactory httpFactory)
+/// <summary>
+/// Anthropic has no "latest Haiku" alias, so a configured Model like "claude-haiku-latest" is looked up here:
+/// the newest "claude-haiku-*" model in GET /v1/models, re-checked daily. A lookup failure, or a model that
+/// rejects our requests (see AnthropicProvider), means FallbackModel until the next check - with a warning
+/// and an error report, so a newer generation that needs code changes doesn't go unnoticed.
+/// </summary>
+public sealed class ModelResolver(ILogger<ModelResolver> log, ErrorReporter? reporter = null, TimeProvider? time = null)
+{
+    public static readonly TimeSpan RefreshEvery = TimeSpan.FromHours(24);
+    public static readonly TimeSpan RetryLookupAfter = TimeSpan.FromMinutes(10);
+    private const string LatestSuffix = "-latest";
+
+    private sealed record Entry(string Model, DateTimeOffset Expires);
+    private readonly ConcurrentDictionary<string, Entry> _cache = new();
+    private readonly TimeProvider _time = time ?? TimeProvider.System;
+
+    public static bool IsLatestAlias(string model) => model.EndsWith(LatestSuffix, StringComparison.Ordinal);
+
+    /// <summary>The model currently in use for this alias (FallbackModel until the first lookup).</summary>
+    public string Current(ProviderSettings p) =>
+        !IsLatestAlias(p.Model) ? p.Model
+        : _cache.TryGetValue(p.Model, out var e) ? e.Model
+        : FallbackOrAlias(p);
+
+    public async Task<string> ResolveAsync(ProviderSettings p, HttpClient http, CancellationToken ct)
+    {
+        var now = _time.GetUtcNow();
+        _cache.TryGetValue(p.Model, out var hit);
+        if (hit is not null && hit.Expires > now)
+            return hit.Model;
+
+        var family = p.Model[..^LatestSuffix.Length] + "-"; // "claude-haiku-latest" -> "claude-haiku-"
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"{p.BaseUrl.TrimEnd('/')}/v1/models?limit=1000");
+            req.Headers.Add("x-api-key", ApiKeys.Get(p.ApiKeyEnv));
+            req.Headers.Add("anthropic-version", "2023-06-01");
+            using var res = await http.SendAsync(req, ct);
+            var json = await res.Content.ReadAsStringAsync(ct);
+            if (!res.IsSuccessStatusCode)
+                throw new LlmHttpException("models", (int)res.StatusCode, json);
+
+            var newest = PickNewest(family, json)
+                         ?? throw new InvalidOperationException($"no model starting with '{family}' in the models list");
+            if (hit?.Model != newest)
+                log.LogInformation("Model {Alias} -> {Model}", p.Model, newest);
+            _cache[p.Model] = new Entry(newest, now + RefreshEvery);
+            return newest;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            var fallback = FallbackOrAlias(p);
+            log.LogWarning("Model {Alias}: lookup failed ({Error}), using {Fallback}", p.Model, ex.Message, fallback);
+            reporter?.Report("model lookup", $"{p.Model}: {ex.Message} - using {fallback}");
+            _cache[p.Model] = new Entry(fallback, now + RetryLookupAfter);
+            return fallback;
+        }
+    }
+
+    /// <summary>The newest model refused a request: use FallbackModel until the next daily check.</summary>
+    public void Reject(ProviderSettings p, string model, Exception ex)
+    {
+        log.LogWarning("Model {Model} rejected a request ({Error}), falling back to {Fallback}", model, ex.Message, p.FallbackModel);
+        reporter?.Report("model rejected",
+            $"{model} (newest for {p.Model}) refused a request, using {p.FallbackModel} - the provider code may need an update: {ex.Message}");
+        _cache[p.Model] = new Entry(p.FallbackModel, _time.GetUtcNow() + RefreshEvery);
+    }
+
+    /// <summary>Newest id starting with <paramref name="family"/> by created_at; on a tie the shorter id (an alias over its dated snapshot).</summary>
+    public static string? PickNewest(string family, string modelsJson)
+    {
+        using var doc = JsonDocument.Parse(modelsJson);
+        return doc.RootElement.GetProperty("data").EnumerateArray()
+            .Select(m => (Id: m.GetProperty("id").GetString() ?? "",
+                          Created: m.TryGetProperty("created_at", out var c) && c.TryGetDateTimeOffset(out var d) ? d : DateTimeOffset.MinValue))
+            .Where(m => m.Id.StartsWith(family, StringComparison.Ordinal))
+            .OrderByDescending(m => m.Created).ThenBy(m => m.Id.Length)
+            .Select(m => m.Id)
+            .FirstOrDefault();
+    }
+
+    private static string FallbackOrAlias(ProviderSettings p) => p.FallbackModel is { Length: > 0 } f ? f : p.Model;
+}
+
+public sealed class ProviderFactory(LlmSettings settings, IHttpClientFactory httpFactory, ModelResolver? resolver = null)
 {
     public ILlmProvider Create(string name)
     {
@@ -172,7 +277,7 @@ public sealed class ProviderFactory(LlmSettings settings, IHttpClientFactory htt
 
         return p.Kind.ToLowerInvariant() switch
         {
-            "anthropic" => new AnthropicProvider(name, p, http),
+            "anthropic" => new AnthropicProvider(name, p, http, resolver),
             "openai" => new OpenAiCompatibleProvider(name, p, http),
             _ => throw new InvalidOperationException($"Unknown provider kind '{p.Kind}' for '{name}'.")
         };
