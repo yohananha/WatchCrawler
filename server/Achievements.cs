@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace GarminAchievements;
 
@@ -149,6 +150,9 @@ public static class PromptBuilder
               It must fit on a small watch screen, so aim well under: title ~{{s.MaxTitleChars / 8}} words,
               text ~{{s.MaxTextChars / 8}} words, reward ~{{s.MaxRewardChars / 8}} words. Brevity is part of the joke.
 
+            - Each field is only its content, with no label: the watch already shows "Reward" as a heading,
+              so write "A participation sticker.", never "Reward: A participation sticker.".
+
             Output ONLY a JSON object, no markdown, no extra text:
             {"title": "...", "text": "...", "reward": "..."}
             """;
@@ -203,11 +207,19 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
 
+    /// <summary>"Reward: a sticker." -> "A sticker.": the watch already shows each field's heading, and some
+    /// models (Haiku 5.5) repeat it inside the value.</summary>
+    public static string WithoutLabel(string value, string label)
+    {
+        var v = Regex.Replace(value.Trim(), $@"^{label}\s*[:\-\u2013\u2014]\s*", "", RegexOptions.IgnoreCase);
+        return v.Length > 0 && v != value.Trim() ? char.ToUpperInvariant(v[0]) + v[1..] : v;
+    }
+
     private static readonly AchievementText[] FallbackBank =
     [
-        new("Offline and Unimpressed", "The commentary satellite is down. Your achievement happened anyway, sadly unwitnessed.", "Reward: silence."),
-        new("Achievement Pending", "Something occurred. The System is too busy to care right now.", "Reward: a vague sense of progress."),
-        new("Technical Difficulties", "The announcer is on a break. Please imagine something cutting.", "Reward: use your imagination.")
+        new("Offline and Unimpressed", "The commentary satellite is down. Your achievement happened anyway, sadly unwitnessed.", "Silence."),
+        new("Achievement Pending", "Something occurred. The System is too busy to care right now.", "A vague sense of progress."),
+        new("Technical Difficulties", "The announcer is on a break. Please imagine something cutting.", "Use your imagination.")
     ];
 
     /// <summary>Single-user mode: the shared <see cref="RecentHistory"/> is the "do not repeat" list.</summary>
@@ -306,10 +318,12 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
 
             result = parsed with
             {
-                Title = parsed.Title.Trim(),
-                Text = parsed.Text.Trim(),
-                Reward = parsed.Reward.Trim()
+                Title = WithoutLabel(parsed.Title, "title"),
+                Text = WithoutLabel(parsed.Text, "text"),
+                Reward = WithoutLabel(parsed.Reward, "reward")
             };
+            if (result.Title.Length == 0 || result.Text.Length == 0 || result.Reward.Length == 0)
+                return false;
             return true;
         }
         catch (JsonException)

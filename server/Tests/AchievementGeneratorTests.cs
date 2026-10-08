@@ -35,6 +35,27 @@ public class AchievementGeneratorTests
     }
 
     [Fact]
+    public async Task FieldLabelInsideValue_IsStripped()
+    {
+        var (gen, _, provider) = Setup();
+        provider.Returns("""{"title":"Title: Nice","text":"You did a thing.","reward":"Reward: a participation sticker, slightly damp."}""");
+
+        var result = await gen.GenerateAsync(Event(), provider, recordHistory: false, CancellationToken.None);
+
+        Assert.False(result.Achievement.IsFallback);
+        Assert.Equal("Nice", result.Achievement.Title);
+        Assert.Equal("A participation sticker, slightly damp.", result.Achievement.Reward);
+    }
+
+    [Theory]
+    [InlineData("REWARD - nothing.", "Nothing.")]
+    [InlineData("reward:   silence", "Silence")]
+    [InlineData("Rewarding yourself is cheating.", "Rewarding yourself is cheating.")]
+    [InlineData("A cookie.", "A cookie.")]
+    public void WithoutLabel_StripsOnlyALeadingLabel(string value, string expected) =>
+        Assert.Equal(expected, AchievementGenerator.WithoutLabel(value, "reward"));
+
+    [Fact]
     public async Task JsonWithSurroundingMarkdown_StillParses()
     {
         var (gen, _, provider) = Setup();

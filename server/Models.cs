@@ -89,6 +89,10 @@ public sealed class ProviderSettings
     /// the newest one can't be looked up or rejects a request.</summary>
     public string FallbackModel { get; set; } = "";
 
+    /// <summary>Anthropic only: output_config.effort ("low", "medium"...) for models with adaptive thinking.
+    /// Never sent to FallbackModel, so keep that a model that takes no effort (e.g. claude-haiku-4-5).</summary>
+    public string Effort { get; set; } = "";
+
     public string ApiKeyEnv { get; set; } = "";
 
     /// <summary>OpenAI-compatible reasoning models only: sends thinking={type:disabled} so the token budget goes to the answer.</summary>

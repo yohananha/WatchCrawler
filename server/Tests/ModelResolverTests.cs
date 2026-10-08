@@ -32,6 +32,7 @@ public class ModelResolverTests
     private sealed class Api(string? models, Func<string, HttpResponseMessage> messages) : HttpMessageHandler
     {
         public List<string> Calls { get; } = new();
+        public Action<string>? OnMessage { get; set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
         {
@@ -40,7 +41,9 @@ public class ModelResolverTests
                 Calls.Add("models");
                 return models is null ? new HttpResponseMessage(HttpStatusCode.InternalServerError) : Json(HttpStatusCode.OK, models);
             }
-            using var doc = JsonDocument.Parse(await req.Content!.ReadAsStringAsync(ct));
+            var body = await req.Content!.ReadAsStringAsync(ct);
+            OnMessage?.Invoke(body);
+            using var doc = JsonDocument.Parse(body);
             var model = doc.RootElement.GetProperty("model").GetString()!;
             Calls.Add(model);
             return messages(model);
@@ -94,6 +97,23 @@ public class ModelResolverTests
         Assert.Equal("hi", r.Content);
         Assert.Equal(["models", "claude-haiku-9", "claude-haiku-4-5", "claude-haiku-4-5"], api.Calls);
         Assert.Equal("claude-haiku-4-5", p.Model);
+    }
+
+    [Fact]
+    public async Task Effort_IsSentToNewestModel_ButNeverToFallback()
+    {
+        var bodies = new List<string>();
+        var api = new Api(Models, m => m == "claude-haiku-9"
+            ? Json(HttpStatusCode.BadRequest, """{"type":"error","error":{"type":"invalid_request_error","message":"nope"}}""")
+            : Ok());
+        api.OnMessage = bodies.Add;
+        var s = Settings();
+        s.Effort = "low";
+
+        await Provider(api, Resolver(), s).CompleteAsync("s", "u", 1.0, default);
+
+        Assert.Contains("\"effort\":\"low\"", bodies[0]);    // claude-haiku-9
+        Assert.DoesNotContain("effort", bodies[1]);            // claude-haiku-4-5
     }
 
     [Fact]

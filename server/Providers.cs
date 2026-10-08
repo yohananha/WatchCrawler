@@ -60,12 +60,12 @@ public sealed class AnthropicProvider(string name, ProviderSettings settings, Ht
     public async Task<LlmResult> CompleteAsync(string system, string user, double temperature, CancellationToken ct)
     {
         if (resolver is null || !ModelResolver.IsLatestAlias(settings.Model))
-            return await SendAsync(settings.Model, system, user, temperature, ct);
+            return await SendAsync(settings.Model, settings.Effort, system, user, temperature, ct);
 
         var model = await resolver.ResolveAsync(settings, http, ct);
         try
         {
-            return await SendAsync(model, system, user, temperature, ct);
+            return await SendAsync(model, model == settings.FallbackModel ? null : settings.Effort, system, user, temperature, ct);
         }
         // A newer model can refuse what this request sends (a newer generation may reject temperature, say):
         // answer with the known-good model instead of failing every achievement until someone notices.
@@ -73,20 +73,25 @@ public sealed class AnthropicProvider(string name, ProviderSettings settings, Ht
                                           && settings.FallbackModel is { Length: > 0 } fallback && model != fallback)
         {
             resolver.Reject(settings, model, ex);
-            return await SendAsync(settings.FallbackModel, system, user, temperature, ct);
+            return await SendAsync(settings.FallbackModel, null, system, user, temperature, ct);
         }
     }
 
-    private async Task<LlmResult> SendAsync(string model, string system, string user, double temperature, CancellationToken ct)
+    // effort is null for models that reject it (Haiku 4.5, the usual FallbackModel).
+    private async Task<LlmResult> SendAsync(string model, string? effort, string system, string user, double temperature, CancellationToken ct)
     {
-        var body = new
+        var body = new Dictionary<string, object>
         {
-            model,
-            max_tokens = 400,
-            temperature,
-            system,
-            messages = new[] { new { role = "user", content = user } }
+            ["model"] = model,
+            // Room for adaptive thinking (Haiku 5.5 thinks by default; it counts toward max_tokens) plus the
+            // short JSON answer. Only tokens actually used are billed.
+            ["max_tokens"] = 2000,
+            ["temperature"] = temperature,
+            ["system"] = system,
+            ["messages"] = new[] { new { role = "user", content = user } }
         };
+        if (effort is { Length: > 0 })
+            body["output_config"] = new { effort };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{settings.BaseUrl.TrimEnd('/')}/v1/messages")
         {
