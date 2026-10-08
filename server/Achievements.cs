@@ -146,6 +146,7 @@ public static class PromptBuilder
             - Roast the effort, never the body: no comments on weight or appearance, and no medical advice.
             - {{profanity}}
             - Write in {{s.Language}}.
+            - The watch's pixel font has plain ASCII only: no emoji, curly quotes, long dashes or ellipsis characters.
             - Hard limits: title <= {{s.MaxTitleChars}} chars, text <= {{s.MaxTextChars}} chars, reward <= {{s.MaxRewardChars}} chars.
               It must fit on a small watch screen, so aim well under: title ~{{s.MaxTitleChars / 8}} words,
               text ~{{s.MaxTextChars / 8}} words, reward ~{{s.MaxRewardChars / 8}} words. Brevity is part of the joke.
@@ -206,6 +207,34 @@ public static class PromptBuilder
 public sealed class AchievementGenerator(LlmSettings settings, RecentHistory history)
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+    /// <summary>Every character the watch's pixel fonts can draw (printable ASCII plus a few accented letters);
+    /// anything else shows as a box. Fonts come from watch/tools/regen_fonts.py, and WatchGlyphTests checks
+    /// this list against them.</summary>
+    public const string WatchGlyphs =
+        " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+        + "\u00C8\u00C9\u00CF\u00E8\u00E9\u00EF"; // È É Ï è é ï
+
+    private static readonly HashSet<char> WatchGlyphSet = [.. WatchGlyphs];
+
+    /// <summary>Text the watch can draw: typographic dashes, quotes and ellipses become their ASCII versions,
+    /// and anything else outside <see cref="WatchGlyphs"/> (emoji, arrows...) is removed - an allowlist, so
+    /// nothing from the model can turn into a box.</summary>
+    public static string WatchSafe(string value)
+    {
+        var sb = new StringBuilder(value.Length);
+        foreach (var c in value)
+            sb.Append(c switch
+            {
+                '\u2012' or '\u2013' or '\u2014' or '\u2212' => "-",
+                '\u2018' or '\u2019' => "'",
+                '\u201C' or '\u201D' => "\"",
+                '\u2026' => "...",
+                '\t' or '\n' or '\r' => " ",
+                _ => WatchGlyphSet.Contains(c) ? c.ToString() : ""
+            });
+        return Regex.Replace(sb.ToString(), @"\s{2,}", " ").Trim();
+    }
 
     /// <summary>"Reward: a sticker." -> "A sticker.": the watch already shows each field's heading, and some
     /// models (Haiku 5.5) repeat it inside the value.</summary>
@@ -318,9 +347,9 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
 
             result = parsed with
             {
-                Title = WithoutLabel(parsed.Title, "title"),
-                Text = WithoutLabel(parsed.Text, "text"),
-                Reward = WithoutLabel(parsed.Reward, "reward")
+                Title = WatchSafe(WithoutLabel(parsed.Title, "title")),
+                Text = WatchSafe(WithoutLabel(parsed.Text, "text")),
+                Reward = WatchSafe(WithoutLabel(parsed.Reward, "reward"))
             };
             if (result.Title.Length == 0 || result.Text.Length == 0 || result.Reward.Length == 0)
                 return false;

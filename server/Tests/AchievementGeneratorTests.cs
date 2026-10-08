@@ -48,6 +48,14 @@ public class AchievementGeneratorTests
     }
 
     [Theory]
+    [InlineData("The couch called\u2014it wants its throne back.", "The couch called-it wants its throne back.")]
+    [InlineData("\u201CPersonal best\u201D, it\u2019s fine\u2026", "\"Personal best\", it's fine...")]
+    [InlineData("Respect +1; ego & pride @ 100%.", "Respect +1; ego & pride @ 100%.")]
+    [InlineData("Caf\u00E9 run \U0001F3C6 \u2192 done", "Caf\u00E9 run done")]
+    public void WatchSafe_KeepsWhatTheFontsDraw_AndDropsTheRest(string value, string expected) =>
+        Assert.Equal(expected, AchievementGenerator.WatchSafe(value));
+
+    [Theory]
     [InlineData("REWARD - nothing.", "Nothing.")]
     [InlineData("reward:   silence", "Silence")]
     [InlineData("Rewarding yourself is cheating.", "Rewarding yourself is cheating.")]

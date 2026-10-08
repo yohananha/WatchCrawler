@@ -171,12 +171,17 @@ Before each push (no CI for the watch):
 
 This SDK needs the old AngelCode `.fnt`+`.png` bitmap-font format, not a raw `.ttf` (confirmed
 empirically — no BMFont GUI was available in this dev environment either, hence
-`tools/make_bmfont.py`, a from-scratch Python+Pillow generator). Regenerate after changing the
-character set:
+`tools/make_bmfont.py`, a from-scratch Python+Pillow generator). The sources are in `tools/fonts/`
+(Press Start 2P for the `px` fonts, Silkscreen for `sk`; both OFL). To add characters, edit the
+character set in `tools/regen_fonts.py` and regenerate every size:
 
 ```bash
-python tools/make_bmfont.py <font.ttf> resources/fonts/<name><size> <size> "<chars>"
+python tools/regen_fonts.py
 ```
+
+A character missing from the fonts is drawn as a box. The server only sends characters the fonts have
+(`AchievementGenerator.WatchGlyphs`), and `server/Tests/WatchGlyphTests.cs` fails if that list or any
+built-in line drifts from the fonts.
 
 ## Known limitations (see the project plan for full detail)
 
