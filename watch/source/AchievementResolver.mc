@@ -7,7 +7,8 @@ import Toybox.System;
 // Turns a "core" event (hero/stat/tier/sound + raw numbers, no text yet -
 // see ActivityDetector) into a complete achievement dict, via the Phase 2
 // LLM server when a server URL is configured and reachable, falling back to
-// the local TextBank (Phase 1) on any failure: no URL set, no network, no
+// an earlier AI line for the same kind of event (SpareLines), then the local
+// TextBank (Phase 1), on any failure: no URL set, no network, no
 // phone, wrong key, timeout, bad response.
 //
 // A singleton instance (not static functions) because Communications.
@@ -132,6 +133,9 @@ class AchievementResolver {
 
     private function finishWithServerText(data as Dictionary) as Void {
         var core = _core as Dictionary;
+        if (data["title"] instanceof String && data["text"] instanceof String && data["reward"] instanceof String) {
+            SpareLines.save(core, data["title"] as String, data["text"] as String, data["reward"] as String);
+        }
         var result = {
             "hero" => core["hero"],
             "title" => data["title"],
@@ -149,8 +153,12 @@ class AchievementResolver {
         var core = _core as Dictionary;
         var tier = Baseline.tierFromName(core["tier"] as String);
         var noDistance = core.hasKey("unit") && (core["unit"] as String).equals("min");
-        var words = core.hasKey("eventType") ? TextBank.pickEvent(core["eventType"] as String, core["tier"] as String) : noDistance ? TextBank.pickWorkout(tier, core["durationSec"] as Number, core["hero"] as String) : TextBank.pick(tier, core["km"] as Float, core["durationSec"] as Number,
-            core["pace"] as String, core["hero"] as String);
+        // An earlier AI line for the same kind of event beats the built-in ones (see SpareLines).
+        var words = SpareLines.take(core);
+        if (words == null) {
+            words = core.hasKey("eventType") ? TextBank.pickEvent(core["eventType"] as String, core["tier"] as String) : noDistance ? TextBank.pickWorkout(tier, core["durationSec"] as Number, core["hero"] as String) : TextBank.pick(tier, core["km"] as Float, core["durationSec"] as Number,
+                core["pace"] as String, core["hero"] as String);
+        }
         var result = {
             "hero" => core["hero"],
             "title" => words[0],

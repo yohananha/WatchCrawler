@@ -103,7 +103,10 @@ its public URL and shared key baked in the same way, so the user installs it and
   generated one kept in Storage). The server keys the trial, the licence and the "do not repeat"
   history on it.
 - A `200` answer with `"local": true` (trial over, daily AI cap, LLM down) is not an error: the
-  watch writes the line from `TextBank` and keeps the `notice`/`license` the answer carried.
+  watch writes the line itself and keeps the `notice`/`license` the answer carried.
+- Whenever the watch writes its own line (that answer, no server, no phone), it first reuses an earlier
+  AI line for the same sport/event at the same tier (`SpareLines.mc`: the last 10 AI lines without
+  digits, oldest dropped, each used once), then falls back to the built-in `TextBank` lines.
 - **MENU** in a user build opens the **Unlock screen** (`UnlockView.mc`): trial / unlocked-until /
   out of mana, the unlock code and the page to type it into. Developer builds reach the same screen
   with UP from the second diagnostics page.
