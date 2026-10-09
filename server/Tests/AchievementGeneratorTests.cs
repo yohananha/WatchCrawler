@@ -168,6 +168,35 @@ public class AchievementGeneratorTests
     }
 
     [Fact]
+    public async Task HangingProvider_GivesUpWithinBudget_AndReturnsFallback()
+    {
+        var settings = new LlmSettings();
+        var gen = new AchievementGenerator(settings, new RecentHistory(settings)) { Budget = TimeSpan.FromMilliseconds(50) };
+        var provider = new FakeProvider().Hangs();
+
+        var result = await gen.GenerateAsync(Event(), provider, recordHistory: false, CancellationToken.None);
+
+        Assert.True(result.Achievement.IsFallback);
+        Assert.Equal(LlmErrorKind.Timeout, result.ErrorKind);
+        Assert.Equal(1, provider.CallCount); // no retry once the budget is spent
+    }
+
+    [Fact]
+    public async Task TooLongAnswer_ThenHang_KeepsTheTrimmedFirstAnswer()
+    {
+        var settings = new LlmSettings();
+        var gen = new AchievementGenerator(settings, new RecentHistory(settings)) { Budget = TimeSpan.FromMilliseconds(50) };
+        var provider = new FakeProvider()
+            .Returns($$"""{"title":"{{new string('x', 60)}}","text":"Fine.","reward":"Fine."}""")
+            .Hangs();
+
+        var result = await gen.GenerateAsync(Event(), provider, recordHistory: false, CancellationToken.None);
+
+        Assert.False(result.Achievement.IsFallback);
+        Assert.True(result.Achievement.Title.Length <= settings.MaxTitleChars);
+    }
+
+    [Fact]
     public void RecentHistory_CapsAtConfiguredSize()
     {
         var settings = new LlmSettings { RecentHistorySize = 2 };

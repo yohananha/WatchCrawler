@@ -5,7 +5,7 @@ namespace GarminAchievements.Tests;
 /// without hitting a real LLM API.</summary>
 public sealed class FakeProvider : ILlmProvider
 {
-    private readonly Queue<Func<LlmResult>> _responses = new();
+    private readonly Queue<Func<CancellationToken, Task<LlmResult>>> _responses = new();
 
     public string Name => "Fake";
     public string Model => "fake-model";
@@ -13,13 +13,24 @@ public sealed class FakeProvider : ILlmProvider
 
     public FakeProvider Returns(string content, int inTok = 10, int outTok = 10)
     {
-        _responses.Enqueue(() => new LlmResult(content, inTok, outTok, TimeSpan.FromMilliseconds(1)));
+        _responses.Enqueue(_ => Task.FromResult(new LlmResult(content, inTok, outTok, TimeSpan.FromMilliseconds(1))));
         return this;
     }
 
     public FakeProvider Throws(Exception ex)
     {
-        _responses.Enqueue(() => throw ex);
+        _responses.Enqueue(_ => throw ex);
+        return this;
+    }
+
+    /// <summary>Never answers: waits until the call is cancelled, like an LLM API that hangs.</summary>
+    public FakeProvider Hangs()
+    {
+        _responses.Enqueue(async ct =>
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            throw new InvalidOperationException("unreachable");
+        });
         return this;
     }
 
@@ -29,6 +40,6 @@ public sealed class FakeProvider : ILlmProvider
         if (_responses.Count == 0)
             throw new InvalidOperationException("FakeProvider has no more queued responses.");
 
-        return Task.FromResult(_responses.Dequeue()());
+        return _responses.Dequeue()(ct);
     }
 }

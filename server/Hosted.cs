@@ -98,12 +98,12 @@ public static class Licensing
         return e.State switch
         {
             Entitlement.Expired when d.LicensedUntil is null => new CreditNotice("out", "Out of Mana",
-                $"Free narration ended. Restore it at {where}.", "Reward: silence, until you pay."),
+                $"Free narration ended. Restore it at {where}.", "Silence, until you pay."),
             Entitlement.Expired => new CreditNotice("out", "Out of Mana",
-                $"Your {s.LicenseYears} years of mana are spent. Renew at {where}.", "Reward: silence, until you pay."),
+                $"Your {s.LicenseYears} years of mana are spent. Renew at {where}.", "Silence, until you pay."),
             Entitlement.Trial or Entitlement.Capped when d.LicensedUntil is null && e.DaysLeft is { } left && left <= s.TrialWarnDays =>
                 new CreditNotice("trial", "Trial Mana Fading",
-                    $"{(left <= 1 ? "Last day" : left + " days")} of free narration. Unlock at {where}.", "Reward: a decision."),
+                    $"{(left <= 1 ? "Last day" : left + " days")} of free narration. Unlock at {where}.", "A decision."),
             _ => null
         };
     }
