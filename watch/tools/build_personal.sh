@@ -158,7 +158,10 @@ if [ "$STORE" = 1 ]; then
     echo "Upload it at https://apps.garmin.com/developer/upload - every later upload must be signed with the same key."
     exit 0
 fi
-"$MONKEYC" -f "$JUNGLE" -d "$DEVICE" -o bin/WatchCrawler.prg -y keys/developer_key.der -w
+# -r here too: the (:debug) self-test fires a fake LEGENDARY the first time the diagnostics screen opens,
+# which on a real watch replaces the real achievement waiting behind "Claim reward". It is for the simulator
+# (plain monkeyc without -r); a build for the watch never needs it.
+"$MONKEYC" -f "$JUNGLE" -d "$DEVICE" -r -o bin/WatchCrawler.prg -y keys/developer_key.der -w
 
 echo
 echo "Built: $BUILD_DIR/bin/WatchCrawler.prg (build $BUILD_STAMP$([ "$DEV" = 1 ] && echo ', developer build'))"
