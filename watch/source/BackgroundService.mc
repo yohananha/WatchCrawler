@@ -11,7 +11,8 @@ import Toybox.System;
 // poll (remote test trigger / day settings) now only runs when nothing was
 // detected. An event is also saved as "stranded" before its network call and
 // cleared once it is shown; if the run dies mid-request, the next run shows
-// it with local text instead of losing it. Either path resolves the
+// it with local text instead of losing it - once: if that run dies too, the
+// event is gone and detection carries on. Either path resolves the
 // achievement text via AchievementResolver (LLM server, falling back to the
 // local TextBank), queues it for the foreground view, and notifies. Those
 // are async network calls, so Background.exit() is only called from
@@ -44,9 +45,18 @@ class BackgroundService extends System.ServiceDelegate {
         }
         var stranded = Application.Storage.getValue(STRANDED);
         if (stranded instanceof Dictionary) {
+            // One try only: cleared BEFORE showing it. An event whose showing itself kills the
+            // run used to stay saved and kill every later run too, so no new activity was ever
+            // detected again (diagnostics stuck on "stranded event -> local text" for a day).
+            Application.Storage.deleteValue(STRANDED);
             BgStatus.mark("stranded event -> local text");
-            AchievementResolver.get().resolveLocal(stranded as Dictionary, method(:onResolved));
-            return;
+            try {
+                AchievementResolver.get().resolveLocal(stranded as Dictionary, method(:onResolved));
+                return;
+            } catch (ex) {
+                BgStatus.mark("stranded event dropped: " + ex.getErrorMessage());
+                WatchErr.record("stranded", -1);
+            }
         }
 
         BgStatus.mark("detecting");
@@ -116,7 +126,16 @@ class BackgroundService extends System.ServiceDelegate {
             DayEvents.noteAchievement(); // the idle roast itself doesn't count as an achievement
         }
         DayEvents.noteSent();
-        PendingQueue.push(achievement, _isTest);
+        // Marked step by step: a crash here leaves the last stage on the diagnostics screen.
+        BgStatus.mark("showing: queueing");
+        try {
+            PendingQueue.push(achievement, _isTest);
+        } catch (ex) {
+            // Still notify: a lost "Claim reward" view beats a lost achievement.
+            BgStatus.mark("queue failed: " + ex.getErrorMessage());
+            WatchErr.record("queue", -1);
+        }
+        BgStatus.mark("showing: notifying");
         var result = Notifier.notifyAchievement(achievement);
         BgStatus.mark("done: notified (" + result + ")");
         Background.exit(true);

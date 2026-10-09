@@ -31,9 +31,11 @@ class DiagnosticDelegate extends WatchUi.BehaviorDelegate {
     }
 
     // DOWN: forget which activity was last announced, so the next background tick
-    // (<= 5 min) announces the newest one in the watch history again.
+    // (<= 5 min) announces the newest one in the watch history again. Also drops a
+    // stranded event, which would otherwise be shown first instead of detecting.
     function onNextPage() as Boolean {
         Application.Storage.setValue("lastSeenActivityStart", 0);
+        Application.Storage.deleteValue("strandedEvent");
         Diag.status = "reset: newest activity re-announces on next tick";
         WatchUi.requestUpdate();
         return true;
