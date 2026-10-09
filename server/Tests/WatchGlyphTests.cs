@@ -33,12 +33,12 @@ public class WatchGlyphTests
         Assert.Equal(Drawable().OrderBy(c => c), AchievementGenerator.WatchGlyphs.OrderBy(c => c));
 
     [Theory]
-    [InlineData("TextBank.mc")]
-    [InlineData("SystemNotice.mc")]
+    [InlineData("resources/textbank/textbank.xml")]
+    [InlineData("source/SystemNotice.mc")]
     public void BuiltInLines_UseOnlyDrawableCharacters(string file)
     {
         var drawable = Drawable();
-        var src = File.ReadAllText(Path.Combine(Repo, "watch", "source", file));
+        var src = File.ReadAllText(Path.Combine(Repo, "watch", file));
         // Display strings: quoted text with a space in it, minus $1$-style placeholders (filled with numbers/labels).
         var bad = Regex.Matches(src, @"""((?:[^""\\\n]|\\.)*)""")
             .Select(m => Regex.Replace(m.Groups[1].Value, @"\$\d\$", ""))
