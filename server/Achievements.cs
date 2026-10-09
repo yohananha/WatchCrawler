@@ -217,6 +217,11 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
 
     private static readonly HashSet<char> WatchGlyphSet = [.. WatchGlyphs];
 
+    /// <summary>Longest a whole generation may take, retries and model fallback included. The watch's background
+    /// job is killed after 30 s, phone relay included; an answer later than that is never seen and the event
+    /// is shown with the watch's own text one run later. Past this, the canned/local text is returned instead.</summary>
+    public TimeSpan Budget { get; init; } = TimeSpan.FromSeconds(20);
+
     /// <summary>Text the watch can draw: typographic dashes, quotes and ellipses become their ASCII versions,
     /// and anything else outside <see cref="WatchGlyphs"/> (emoji, arrows...) is removed - an allowlist, so
     /// nothing from the model can turn into a box.</summary>
@@ -269,12 +274,15 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
         var errorKind = LlmErrorKind.None;
         AchievementText? lastParsed = null;
 
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(Budget);
+
         for (var attempt = 1; attempt <= 2; attempt++)
         {
             attempts = attempt;
             try
             {
-                var r = await provider.CompleteAsync(system, user, settings.Temperature, ct);
+                var r = await provider.CompleteAsync(system, user, settings.Temperature, deadline.Token);
                 inTok += r.InputTokens;
                 outTok += r.OutputTokens;
                 latency += r.Latency;
@@ -294,6 +302,12 @@ public sealed class AchievementGenerator(LlmSettings settings, RecentHistory his
                     errorKind = LlmErrorKind.BadOutput;
                     user += "\n\nYour previous answer was not valid JSON. Return ONLY the JSON object.";
                 }
+            }
+            catch (OperationCanceledException) when (deadline.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                error = $"No answer within {Budget.TotalSeconds:0} s, the watch would have given up.";
+                errorKind = LlmErrorKind.Timeout;
+                break;
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
             {

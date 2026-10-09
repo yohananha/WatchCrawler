@@ -188,10 +188,10 @@ public sealed class UsageTracker
         {
             "out" => new CreditNotice("out", "Out of Mana",
                 $"Your API credit is empty. Using backup lines until you top up at {topUp}.",
-                "Reward: silence, until you pay."),
+                "Silence, until you pay."),
             "low" => new CreditNotice("low", "Mana Reserves Low",
                 r.DaysLeft is { } d ? $"About {Math.Max(1, (int)d)} days of API credit left. Top up at {topUp}." : $"API credit is running low. Top up at {topUp}.",
-                "Reward: a bill. Soon."),
+                "A bill. Soon."),
             _ => null
         };
     }
