@@ -53,6 +53,11 @@ class DiagnosticView extends WatchUi.View {
         DebugInjector.get().inject(:legendary);
     }
 
+    // Release builds (-r) strip the (:debug) self-test above; onLayout still calls it.
+    (:release)
+    private function selfTestOnce() as Void {
+    }
+
     function onShow() as Void {
     }
 
