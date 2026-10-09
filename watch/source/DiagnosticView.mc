@@ -25,7 +25,9 @@ class DiagnosticView extends WatchUi.View {
         View.initialize();
     }
 
-    // (:debug) so this self-test is stripped from a release build (-r).
+    // (:debug) so this self-test is stripped from a release build (-r) - which is every build for a
+    // real watch (tools/build_personal.sh): there it would replace the real pending achievement.
+    // Simulator only.
     // Guarded to run at most once (onLayout runs once per view instance,
     // but a static flag makes that explicit rather than assumed): fires a
     // single fake legendary achievement through the real pipeline so the
