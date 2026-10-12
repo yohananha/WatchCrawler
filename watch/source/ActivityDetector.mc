@@ -118,6 +118,7 @@ class ActivityDetector {
         if (cap != null && (cap["name"] as String).length() > 0) {
             (core["details"] as Dictionary).put("profileName", cap["name"]);
         }
+        core.put("startEpoch", startEpoch);
         return core;
     }
 

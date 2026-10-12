@@ -83,6 +83,12 @@ class AchievementResolver {
             }
         }
 
+        // The server runs on UTC: without the watch's offset its "local time" is GMT.
+        body.put("utcOffset", System.getClockTime().timeZoneOffset);
+        if (core.hasKey("startEpoch")) {
+            body.put("startedAt", core["startEpoch"]);
+        }
+
         var headers = { "Content-Type" => Communications.REQUEST_CONTENT_TYPE_JSON, "X-Device-Id" => Config.deviceId() };
         var key = Config.sharedKey();
         if (key != null) {

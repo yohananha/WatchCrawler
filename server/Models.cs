@@ -16,7 +16,24 @@ public sealed record GameEvent
     public bool HigherIsBetter { get; init; } = true;
 
     public Dictionary<string, string>? Details { get; init; }
-    public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.Now;
+    public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
+
+    /// <summary>The watch's UTC offset in seconds (DST included). The server's clock is UTC, so without
+    /// this every time the LLM sees would be GMT, not the player's.</summary>
+    public int? UtcOffset { get; init; }
+
+    /// <summary>Activity start, Unix seconds (activity_completed only).</summary>
+    public long? StartedAt { get; init; }
+
+    /// <summary>Time of the event on the player's clock (server time for watches that send no offset).</summary>
+    public DateTimeOffset LocalTimestamp => ToLocal(Timestamp);
+
+    /// <summary>Activity start on the player's clock, if the watch sent it.</summary>
+    public DateTimeOffset? LocalStartedAt => StartedAt is long s ? ToLocal(DateTimeOffset.FromUnixTimeSeconds(s)) : null;
+
+    private DateTimeOffset ToLocal(DateTimeOffset t) =>
+        // DateTimeOffset only takes whole minutes within +-14 h; anything else is a bad value, keep UTC.
+        UtcOffset is int o && o % 60 == 0 && Math.Abs(o) <= 14 * 3600 ? t.ToOffset(TimeSpan.FromSeconds(o)) : t;
 }
 
 public enum Tier { Cursed, Common, Rare, Epic, Legendary }
