@@ -165,7 +165,9 @@ public static class PromptBuilder
         var sb = new StringBuilder();
 
         sb.AppendLine($"Event type: {e.Type}");
-        sb.AppendLine($"Local time: {e.Timestamp:yyyy-MM-dd HH:mm (dddd)}");
+        sb.AppendLine(string.Format(ci, "Local time: {0:yyyy-MM-dd HH:mm (dddd)}", e.LocalTimestamp));
+        if (e.LocalStartedAt is { } started)
+            sb.AppendLine(string.Format(ci, "Started at (local time): {0:yyyy-MM-dd HH:mm (dddd)}", started));
 
         if (e.Value is double v)
             sb.AppendLine(string.Format(ci, "Value: {0:0.##} {1}", v, e.Unit));
