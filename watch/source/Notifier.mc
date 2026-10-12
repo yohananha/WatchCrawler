@@ -14,6 +14,13 @@ import Toybox.System;
 // PendingQueue.push likewise archives the unclaimed item as "missed" - one
 // notification, one pending achievement, so Claim always matches.
 //
+// Other notifications waiting (a WhatsApp message, say): the watch then
+// files ours into its notification list, where START opens the list's own
+// options and "Claim reward" is never offered. So when the background job
+// sees other notifications it asks with the "open app?" prompt instead,
+// which launches straight onto the achievement. The count may include our
+// own unclaimed notification; the prompt still opens the right thing then.
+//
 // Every path returns a short status string instead of failing silently, so
 // Phase 0 can show on-screen what actually happened (see DiagnosticDelegate).
 (:background)
@@ -23,7 +30,7 @@ class Notifier {
         if (Toybox has :Notifications) {
             return notifyViaNotifications(title, subtitle, body);
         } else {
-            return notifyViaWake(title);
+            return notifyViaWake(title + "\n\nClaim reward?");
         }
     }
 
@@ -31,10 +38,17 @@ class Notifier {
         return notify("LEGENDARY ACHIEVEMENT", "Phase 0 Test", "If you can see this with sound/vibration, Notifications works on this device.");
     }
 
-    static function notifyAchievement(a as Dictionary) as String {
+    // fromBackground: only the background job can ask to open the app (the
+    // foreground debug injector is already in it).
+    static function notifyAchievement(a as Dictionary, fromBackground as Boolean) as String {
         var tierUpper = (a["tier"] as String);
         tierUpper = tierUpper.toUpper();
         var title = "system_notice".equals(a["eventType"]) ? "SYSTEM MESSAGE" : tierUpper + " ACHIEVEMENT";
+        var others = System.getDeviceSettings().notificationCount;
+        if (fromBackground && others > 0 && (Toybox has :Background)) {
+            return notifyViaWake(title + "\n" + (a["title"] as String) + "\n\nClaim reward?")
+                + " [" + others + " other notif.]";
+        }
         return notify(title, a["title"] as String, a["text"] as String);
     }
 
@@ -62,11 +76,15 @@ class Notifier {
         }
     }
 
-    private static function notifyViaWake(title as String) as String {
+    private static function notifyViaWake(message as String) as String {
         if (Toybox has :Background) {
             try {
-                Background.requestApplicationWake("Achievement unlocked?" as Application.PersistableType);
-                return "requestApplicationWake() called OK (no Notifications support)";
+                // 255-byte limit; a long achievement title must not lose the prompt.
+                if (message.length() > 120) {
+                    message = (message.substring(0, 117) as String) + "...";
+                }
+                Background.requestApplicationWake(message as Application.PersistableType);
+                return "requestApplicationWake() called OK";
             } catch (ex instanceof Lang.Exception) {
                 return "requestApplicationWake() THREW: " + ex.getErrorMessage();
             }

@@ -136,7 +136,7 @@ class BackgroundService extends System.ServiceDelegate {
             WatchErr.record("queue", -1);
         }
         BgStatus.mark("showing: notifying");
-        var result = Notifier.notifyAchievement(achievement);
+        var result = Notifier.notifyAchievement(achievement, true);
         BgStatus.mark("done: notified (" + result + ")");
         Background.exit(true);
     }

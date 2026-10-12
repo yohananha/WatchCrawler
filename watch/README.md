@@ -4,6 +4,10 @@ Detects events in the background, asks the server (`../server/`) for a sarcastic
 shows a system notification (pops up on the watch) that opens a pixel-art animation with
 sound/vibration. Falls back to local text if the server is unreachable.
 
+If other notifications are already waiting on the watch (WhatsApp etc.), it asks with the
+"open app?" prompt instead: the watch files a notification into its list then, and there START
+opens the list's options rather than **Claim reward**. Confirming the prompt opens the achievement.
+
 ## What triggers an achievement
 
 Checked from a background job (requested every 5 min; Garmin schedules it loosely, so 5-30 min):
