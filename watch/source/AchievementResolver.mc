@@ -32,6 +32,7 @@ class AchievementResolver {
 
     private var _core as Dictionary?;
     private var _callback as Method?;
+    private var _deferCallback as Method?;
 
     function initialize() {
     }
@@ -43,7 +44,11 @@ class AchievementResolver {
         finishWithFallback();
     }
 
-    function resolve(core as Dictionary, callback as Method) as Void {
+    // deferCallback (optional): called with the core instead of falling back to
+    // local text when the server could not be reached at all (no phone link,
+    // battery saver, timeout), so the caller can retry later for a real AI line.
+    function resolve(core as Dictionary, callback as Method, deferCallback as Method?) as Void {
+        _deferCallback = deferCallback;
         if (core.hasKey("isComplete") && core["isComplete"] == true) {
             callback.invoke(core);
             return;
@@ -132,6 +137,15 @@ class AchievementResolver {
             WatchErr.record("achievement", responseCode);
             if (responseCode == 401) {
                 SystemNotice.storeBadKey();
+            }
+            // Negative codes are Garmin's transport errors (-104 no phone, -300 timeout...).
+            var dc = _deferCallback;
+            if (responseCode < 0 && dc != null && _core != null) {
+                var core = _core as Dictionary;
+                _core = null;
+                _callback = null;
+                dc.invoke(core);
+                return;
             }
             finishWithFallback();
         }
