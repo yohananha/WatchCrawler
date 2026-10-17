@@ -30,12 +30,12 @@ class DebugInjector {
 
     function inject(tier as Symbol) as Void {
         var core = ActivityDetector.buildFakeCore(tier);
-        AchievementResolver.get().resolve(core, method(:onResolved));
+        AchievementResolver.get().resolve(core, method(:onResolved), null);
     }
 
     function onResolved(achievement as Dictionary) as Void {
         PendingQueue.push(achievement, true);
-        var result = Notifier.notifyAchievement(achievement, false);
+        var result = Notifier.notifyAchievement(achievement);
         Diag.status = (achievement["tier"] as String) + " queued: " + result;
         System.println("[DIAG] " + Diag.status);
         WatchUi.requestUpdate();

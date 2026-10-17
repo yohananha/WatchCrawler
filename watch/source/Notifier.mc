@@ -14,12 +14,10 @@ import Toybox.System;
 // PendingQueue.push likewise archives the unclaimed item as "missed" - one
 // notification, one pending achievement, so Claim always matches.
 //
-// Other notifications waiting (a WhatsApp message, say): the watch then
-// files ours into its notification list, where START opens the list's own
-// options and "Claim reward" is never offered. So when the background job
-// sees other notifications it asks with the "open app?" prompt instead,
-// which launches straight onto the achievement. The count may include our
-// own unclaimed notification; the prompt still opens the right thing then.
+// Always the regular notification: the full-screen "open app?" prompt used
+// for the "other notifications waiting" case blocked the whole screen. If the
+// watch files ours into its notification list, opening the app by any route
+// still lands on the pending achievement (see AchievementApp.getInitialView).
 //
 // Every path returns a short status string instead of failing silently, so
 // Phase 0 can show on-screen what actually happened (see DiagnosticDelegate).
@@ -38,17 +36,10 @@ class Notifier {
         return notify("LEGENDARY ACHIEVEMENT", "Phase 0 Test", "If you can see this with sound/vibration, Notifications works on this device.");
     }
 
-    // fromBackground: only the background job can ask to open the app (the
-    // foreground debug injector is already in it).
-    static function notifyAchievement(a as Dictionary, fromBackground as Boolean) as String {
+    static function notifyAchievement(a as Dictionary) as String {
         var tierUpper = (a["tier"] as String);
         tierUpper = tierUpper.toUpper();
         var title = "system_notice".equals(a["eventType"]) ? "SYSTEM MESSAGE" : tierUpper + " ACHIEVEMENT";
-        var others = System.getDeviceSettings().notificationCount;
-        if (fromBackground && others > 0 && (Toybox has :Background)) {
-            return notifyViaWake(title + "\n" + (a["title"] as String) + "\n\nClaim reward?")
-                + " [" + others + " other notif.]";
-        }
         return notify(title, a["title"] as String, a["text"] as String);
     }
 

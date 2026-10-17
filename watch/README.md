@@ -4,9 +4,9 @@ Detects events in the background, asks the server (`../server/`) for a sarcastic
 shows a system notification (pops up on the watch) that opens a pixel-art animation with
 sound/vibration. Falls back to local text if the server is unreachable.
 
-If other notifications are already waiting on the watch (WhatsApp etc.), it asks with the
-"open app?" prompt instead: the watch files a notification into its list then, and there START
-opens the list's options rather than **Claim reward**. Confirming the prompt opens the achievement.
+If the server can't be reached (battery saver, phone away), the achievement is held and retried every
+background run for up to 6 hours so it still gets a real AI line, then shown with the built-in text.
+Opening the app any way lands on the pending achievement.
 
 ## What triggers an achievement
 

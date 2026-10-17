@@ -2,6 +2,7 @@ import Toybox.Application;
 import Toybox.Background;
 import Toybox.Lang;
 import Toybox.System;
+import Toybox.Time;
 
 // Runs on Garmin's background timer (registered in AchievementApp.onStart).
 // Order matters: real activity detection runs FIRST, before any network call.
@@ -30,6 +31,12 @@ class BackgroundService extends System.ServiceDelegate {
     // An event whose run died before it was shown (see header).
     private static const STRANDED = "strandedEvent";
 
+    // An event the server couldn't be reached for (battery saver, phone away):
+    // held and retried every run for DEFER_SECONDS to get a real AI line,
+    // then shown with the watch's own text. {"core": ..., "since": epoch}.
+    private static const DEFERRED = "deferredEvent";
+    private static const DEFER_SECONDS = 6 * 3600;
+
     function initialize() {
         ServiceDelegate.initialize();
     }
@@ -49,6 +56,7 @@ class BackgroundService extends System.ServiceDelegate {
             // run used to stay saved and kill every later run too, so no new activity was ever
             // detected again (diagnostics stuck on "stranded event -> local text" for a day).
             Application.Storage.deleteValue(STRANDED);
+            Application.Storage.deleteValue(DEFERRED);
             BgStatus.mark("stranded event -> local text");
             try {
                 AchievementResolver.get().resolveLocal(stranded as Dictionary, method(:onResolved));
@@ -59,11 +67,25 @@ class BackgroundService extends System.ServiceDelegate {
             }
         }
 
+        var deferred = Application.Storage.getValue(DEFERRED);
+        if (deferred instanceof Dictionary && deferred["core"] instanceof Dictionary) {
+            var age = Time.now().value() - (deferred["since"] as Number);
+            if (age > DEFER_SECONDS) {
+                Application.Storage.deleteValue(DEFERRED);
+                BgStatus.mark("deferred event expired -> local text");
+                AchievementResolver.get().resolveLocal(deferred["core"] as Dictionary, method(:onResolved));
+            } else {
+                BgStatus.mark("deferred event -> retrying server");
+                resolveSaved(deferred["core"] as Dictionary, true);
+            }
+            return;
+        }
+
         BgStatus.mark("detecting");
         var core = ActivityDetector.detectCoreEvent();
         if (core != null) {
             BgStatus.mark("new activity -> resolving");
-            resolveSaved(core);
+            resolveSaved(core, true);
             return;
         }
         BgStatus.mark("no new activity -> polling");
@@ -78,7 +100,7 @@ class BackgroundService extends System.ServiceDelegate {
         var core = DayEvents.checkForDayEvent();
         if (core != null) {
             BgStatus.mark("day event " + core["eventType"] + " -> resolving");
-            resolveSaved(core);
+            resolveSaved(core, true);
             return;
         }
         // Nothing happened: a good moment for a pending system message (API credit, refused key).
@@ -93,9 +115,20 @@ class BackgroundService extends System.ServiceDelegate {
     }
 
     // Saved first, so a run that dies waiting on the server doesn't lose the event.
-    private function resolveSaved(core as Dictionary) as Void {
+    private function resolveSaved(core as Dictionary, canDefer as Boolean) as Void {
         Application.Storage.setValue(STRANDED, core);
-        AchievementResolver.get().resolve(core, method(:onResolved));
+        AchievementResolver.get().resolve(core, method(:onResolved), canDefer ? method(:onDeferred) : null);
+    }
+
+    // Server unreachable: keep the event (first time only stamps "since") and try again next run.
+    function onDeferred(core as Dictionary) as Void {
+        var held = Application.Storage.getValue(DEFERRED);
+        if (!(held instanceof Dictionary)) {
+            Application.Storage.setValue(DEFERRED, { "core" => core, "since" => Time.now().value() });
+        }
+        Application.Storage.deleteValue(STRANDED);
+        BgStatus.mark("done: server unreachable -> will retry for AI text");
+        Background.exit(false);
     }
 
     // Remote test trigger: developer builds only. Returns true when it took over this run.
@@ -109,7 +142,7 @@ class BackgroundService extends System.ServiceDelegate {
         // cosmetic mismatch with our local :legendary styling/sound,
         // fine for a "does the round trip work" test.
         var test = ActivityDetector.fakeCoreForKind(kind);
-        AchievementResolver.get().resolve(test, method(:onResolved));
+        AchievementResolver.get().resolve(test, method(:onResolved), null);
         return true;
     }
 
@@ -122,6 +155,7 @@ class BackgroundService extends System.ServiceDelegate {
 
     function onResolved(achievement as Dictionary) as Void {
         Application.Storage.deleteValue(STRANDED);
+        Application.Storage.deleteValue(DEFERRED);
         if (!achievement.hasKey("eventType")) {
             DayEvents.noteAchievement(); // the idle roast itself doesn't count as an achievement
         }
