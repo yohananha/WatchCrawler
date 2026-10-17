@@ -6,6 +6,7 @@ sound/vibration. Falls back to local text if the server is unreachable.
 
 If the server can't be reached (battery saver, phone away), the achievement is held and retried every
 background run for up to 6 hours so it still gets a real AI line, then shown with the built-in text.
+With the watch's alerts / Do Not Disturb on, no notification is shown; the achievement is queued silently.
 Opening the app any way lands on the pending achievement.
 
 ## What triggers an achievement

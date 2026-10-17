@@ -169,8 +169,15 @@ class BackgroundService extends System.ServiceDelegate {
             BgStatus.mark("queue failed: " + ex.getErrorMessage());
             WatchErr.record("queue", -1);
         }
+        // Do Not Disturb / alerts off: stay silent. The achievement is already
+        // queued, so it is waiting the next time the app is opened.
+        if (System.getDeviceSettings().doNotDisturb) {
+            BgStatus.mark("done: alerts off -> queued silently");
+            Background.exit(true);
+            return;
+        }
         BgStatus.mark("showing: notifying");
-        var result = Notifier.notifyAchievement(achievement, true);
+        var result = Notifier.notifyAchievement(achievement);
         BgStatus.mark("done: notified (" + result + ")");
         Background.exit(true);
     }
